@@ -17,6 +17,7 @@ knitr::opts_chunk$set(message=FALSE)
 ```{r libraries & loading data, warning=FALSE, message=FALSE}
 
 library(tidyverse)
+library(tidycensus)
 library(kableExtra)
 library(caret)
 library(knitr) 
@@ -32,6 +33,7 @@ library(janitor)
 library(sf)
 
 library(boxr)
+library(lubridate)
 
 options(scipen=999)
 options(tigris_class = "sf")
@@ -45,6 +47,8 @@ crs <- "EPSG:4326"
 PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West Coast
 
 
+census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
+
 ```
 
 ## Loading Data
@@ -52,6 +56,7 @@ PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West 
 You can also embed plots, for example:
 
 ```{r loading box data, echo=FALSE}
+
 
 
 ```
@@ -63,12 +68,25 @@ structureFire_sf <- structureFire%>%
   st_as_sf(coords = c("Longitude", "Latitude"),
            crs = "EPSG:4326")
 
-min(Property311$requested_datetime)
+min(structureFire$`Alarm Date`)
 
 g(structureFire_sf)
 
 ```
+## Geometry
+```{r ACS Data Loading}
 
+acs_vars <- c("B01001_001E")
+
+acsTractsPHL.2020 <- get_acs(geography = "tract",
+                             year = 2020, 
+                             variables = acs_vars, 
+                             geometry = TRUE, 
+                             state = "PA", 
+                             county = "Philadelphia", 
+                             output = "wide") 
+
+```
 
 ```{r loading 311 data, echo=FALSE}
 
@@ -85,15 +103,59 @@ g(All311)
 
 Property311 <- filter(All311, 
                         service_name == "Building Dangerous" |  
+                        service_name == "Dangerous Building Complaint " |  
                         service_name == "Fire Safety Complaint" | 
                         service_name == "Maintenance Complaint" |
-                        service_name == "Maintenance Residential or Commercial") %>%
+                        service_name == "Maintenance Residential or Commercial" |
+                        service_name == "Vacant House or Commercial" |
+                        service_name == "Maintenance Residential or Commercial" |
+                        service_name == "Fire Residential or Commercial" |
+                        service_name == "Complaints against Fire or EMS" |
+                        service_name == "Vacant Lot Clean-Up" ) %>%
   dplyr::select(objectid, service_request_id, status, service_name, service_code, requested_datetime, agency_responsible, address, zipcode, lat, lon)%>%
-  drop_na(lat, lon)%>%
+  drop_na(lat, lon, address)%>%
   st_as_sf(coords = c("lon", "lat"),
            crs = "EPSG:4326")
 
 min(Property311$requested_datetime)
+
+```
+
+
+``` {r 311 Viz: Bar Charts}
+
+#Creating a summary table of the 311 points across time
+property311_summary <- Property311 %>%
+  mutate(y = lubridate::year(requested_datetime))%>%
+  dplyr::select(service_name, y)
+  
+g(property311_summary)  
+
+table(Property311$service_name)
+
+#Line Plot of the summary table 
+ggplot(data=allTracts.ring.summary, aes(x=distance, y=Rent, group = year),)+
+  geom_line(aes(color=year), size=1.5)+
+  geom_point(aes(color=year), size = 3)+  
+  labs(title = "Rent as a Function of Distance from a Trolley Station", 
+       subtitle = "San Diego transit area, 2019 Census Tracts", 
+       caption = credit,
+       x="Distance from a Trolley Station (Miles)",
+       y="Rent (2019 USD)")+
+  theme(plot.title = element_text(size=18))
+
+Pink <- c("#ffffff","#f9f4f4","#f0e4e4", "#e7d3d3", "#dec3c3")
+
+
+
+ggplot()+
+  geom_sf(data = filter(property311_summary$service_name=="Building Dangerous", aes(fill=y), alpha=0.5, color=NULL) +
+  scale_color_gradient(low = "#ffffff", high = "#dec3c3", na.value = "grey50")+
+  facet_wrap(~service_name)+
+  labs(title = "Number of Airbnb per Neighborhood", subtitle = "Amsterdam, NL; 2018")+
+  mapTheme()
+
+
 
 
 ```
