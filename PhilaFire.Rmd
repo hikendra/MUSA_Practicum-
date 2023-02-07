@@ -1,0 +1,263 @@
+---
+title: "PhilaFire"
+output: html_document
+date: '2023-01-31'
+---
+
+# Set Up
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(boxr)
+library(mapview)
+library(sf)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(tigris)
+library(viridis)
+library(dplyr)
+library(tidycensus)
+library(ggplot2)
+library(RSocrata)
+library(lubridate)
+if (!require("janitor")) install.packages("janitor")
+library(janitor)
+
+options(scipen = 999)
+mapTheme <- theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background=element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm"))
+
+palette5 <- c("#DAE7E4","#A0C1B9","#70A0AF","#497583","#33525B")
+
+root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+```
+
+```{r Box Set Up}
+# Set up work flow
+box_auth(client_id = "zhmuvtkofhuu21py025uhr8cffzew2om", 
+         client_secret = "k39pMJM1FUnBmGnRrM9zVUWk1eth0EVi")
+box_setwd(186732420366)
+box_getwd()
+box_ls()
+list <- box_ls() %>% as.data.frame()
+dat <- box_read_excel(1093000179542) 
+```
+
+# Creating Fire Panel
+```{r}
+# Creating geometry for the fires
+dat <- dat %>% drop_na("Longitude", "Latitude") %>%
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = "EPSG:4326")
+
+# Cleaning the column names
+dat <- clean_names(dat)
+
+# Address String
+dat <-
+  dat %>%
+  unite(address, c('address_number', 'street_prefix', 'street_name', 'street_type'), sep = " ", remove = FALSE, na.rm=TRUE)
+
+# Extracting year
+dat <- dat %>% mutate(year = year(alarm_date))
+
+# Reducing columns
+dat <- dat%>%
+  dplyr::select(address, year, zip_code, census_tract,incident_number, number_of_exposures, incident_type, building_status, fire_spread, minor_damage, significant_damage, heavy_damage, extreme_damage, no_spread, code_description, geometry )
+
+# Initial panel
+dat.panel <- 
+  expand.grid(year = unique(dat$year), 
+              address = unique(dat$address),
+              n = 0)
+
+# Count Panel
+count.panel <- 
+  dat %>%
+  st_drop_geometry() %>%
+  group_by(year, address) %>% 
+  count(address, sort=TRUE) 
+
+# Final Panel
+final.panel <- full_join(dat.panel, count.panel, by=c("address", "year")) # Join
+final.panel <- final.panel %>% dplyr::select(address, year, n.y) %>% rename(count = n.y) # Condensing & Renaming
+final.panel[is.na(final.panel)] <- 0 # Assigning NA to 0
+
+# Joining the other data
+final.panel_TEST <- left_join(final.panel, dat, by=c("address", "year")) # Join
+
+
+```
+
+# Exploratory Analysis - DO NOT RUN ANY OF THESE YET! NOT IMPORTANT FOR NOW!!!!!!!
+
+## Fire by Neighborhood
+```{r Neighborhood Data}
+neighborhoods <- st_read("Neighborhoods_Philadelphia/Neighborhoods_Philadelphia.shp") %>% st_transform(st_crs(dat))
+neighborhoods <- neighborhoods %>% dplyr::select(MAPNAME, Shape_Leng, Shape_Area, geometry)
+
+# Joining the data. This may be the dataset used for spatial analysis
+fire_neighborhood <- st_join(dat, neighborhoods) 
+```
+
+```{r}
+# Creating a new dataset because fire_neighborhood may want to be preserved
+fire_neighborhood_1 <- fire_neighborhood
+
+# Adding a column with a value of 1 to help count the number of fires by neighborhood
+fire_neighborhood_1$fire <-1
+fire_neighborhood_1 <- fire_neighborhood_1 %>% count(fire, MAPNAME, name= "count")
+
+# Calculating the percentage
+fire_neighborhood_1 <- fire_neighborhood_1 %>%
+  mutate(percent = (count/20947) * 100)
+
+# Creating the data frame of top 10 neighborhoods
+top_neighborhoods <- fire_neighborhood_1[order(fire_neighborhood_1$count,decreasing=T)[1:10],]
+
+# Bar chart of top 10 neighborhoods
+ggplot(top_neighborhoods, aes(x=reorder(MAPNAME,count), y=count)) + 
+  geom_bar(position="dodge", stat = "identity") +
+  scale_fill_viridis(option = "mako") +
+  labs(x = "Neighborhood",
+         y = "Count",
+         title = "Philadelpiha Neighborhoods Experiencing The Most Fires") +   coord_flip()
+
+# Map of Top 10 Neighborhoods - THIS ISNT WORKING
+# Should be polygons not multipoint
+# Remove geometry and rejoin to neighborhoods
+ggplot() +
+  geom_sf(data = fire_neighborhood_1,
+          aes(fill=count), 
+          colour=NA) +
+  scale_fill_viridis(option="mako", trans = "reverse",
+                     name = "Mean") +
+  labs(title = "") + mapTheme
+
+
+property | year | #311 calls
+  - could start with a neighborhood first
+- timelag
+-check guillford project
+```
+
+## Fire by Type
+```{r}
+# Creating the data set
+fire_type <- fire_neighborhood
+fire_type_1 <- fire_type
+
+# Adding a column with a value of 1 to help count the number of fires by type
+fire_type_1$type <-1
+
+# Creating the dataset for fire cause by neighborhood
+fire_type_2 <- fire_type_1 %>% count(type,code_description, MAPNAME, name= "cause_by_nhood")
+
+# Creating the data set for cause
+fire_type_1 <- fire_type_1 %>% count(type, code_description, name= "cause")
+
+# Creating the data frame of top 10 causes
+top_causes <- fire_type_1[order(fire_type_1$cause,decreasing=T)[1:10],]
+
+# Bar chart of top 10 neighborhoods
+ggplot(top_causes, aes(x=reorder(code_description,count), y=count)) + 
+  geom_bar(position="dodge", stat = "identity") +
+  scale_fill_viridis(option = "mako") +
+  labs(x = "Cause",
+         y = "Count",
+         title = "Top 10 Causes of Fire in Philadelphia") + coord_flip()
+
+# Top cause of fire by neighborhood - THIS DOESNT WORK
+top_causes_nhood <- fire_type_2 %>% 
+  group_by(MAPNAME) %>% arrange(-cause_by_nhood) %>% slice(1)
+
+```
+
+## Fire by Land Use
+```{r}
+lu <- st_read("Land_Use/Land_Use.shp") %>% st_transform(st_crs(dat))
+
+# Only viewing 100 for now before processing the full data set
+lu_test <- lu %>% sample_n(100)
+
+
+fire_lu <- st_join(dat %>% sample_n(100), lu)
+# specific within, intersection, etc
+# try to do a tabluar join with addresses then try a probablistic match
+# fire nn centroid then do a matching
+
+
+fire_lu$fire <-1
+fire_lu <- fire_lu %>% count(Fire, C_DIG1, name= "Count")
+
+```
+
+# DO NOT RUN THE CODE BELOW. Kinda messy still
+
+## Fire + Permit
+```{r Permit}
+# Loading Permit Data
+permit1 <- read_csv("permits1.csv") #%>% st_transform(crs = 4326) 
+permit2 <- read_csv("permits2.csv") #%>% st_transform(crs = 4326) 
+
+# Combining Datasets
+permit <- rbind(permit1,permit2)
+
+# Parsing Month and Year
+permit <- permit %>%
+  as.data.frame(permit$permitissuedate) %>%
+  mutate(Month = lubridate::month(permit$permitissuedate, label = FALSE),
+         Year = lubridate::year(permit$permitissuedate))
+
+# Removing NA in location
+permit <- permit %>% drop_na(lng, lat)
+```
+
+## Fire + 311 Calls
+```{r 311 Calls}
+all311 <- read_csv("OpenDataPhilly-311Calls.csv")
+
+all311 <- all311 %>% drop_na(lat,lon,address)
+```
+
+```{r}
+phila_data <- merge(permit, all311, by="address")
+
+property311 <- filter(all311, 
+                        service_name == "Building Dangerous" |  
+                        service_name == "Dangerous Building Complaint " |  
+                        service_name == "Fire Safety Complaint" | 
+                        service_name == "Maintenance Complaint" |
+                        service_name == "Maintenance Residential or Commercial" |
+                        service_name == "Vacant House or Commercial" |
+                        service_name == "Maintenance Residential or Commercial" |
+                        service_name == "Fire Residential or Commercial" |
+                        service_name == "Complaints against Fire or EMS" |
+                        service_name == "Vacant Lot Clean-Up" ) %>%
+  dplyr::select(objectid, service_request_id, status, service_name, service_code, requested_datetime, agency_responsible, address, zipcode, lat, lon)%>%
+  st_as_sf(coords = c("lon", "lat"),
+           crs = "EPSG:4326")
+
+permit_sf <- permit%>%
+  st_as_sf(coords = c("lng", "lat"),
+           crs = "EPSG:4326")
+
+```
+
