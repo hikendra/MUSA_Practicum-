@@ -31,6 +31,7 @@ library(ggplot2)
 library(gridExtra)
 library(janitor)
 library(sf)
+library(viridis)
 
 library(boxr)
 library(lubridate)
@@ -49,31 +50,68 @@ PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West 
 
 census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
 
+palletteO <- c("#fef0d9","#fdcc8a","#fc8d59","#e34a33","#b30000")
+
+
+palette5 <- c("#981FAC","#CB0F8B","#FF006A","#FE4C35","#FE9900")
+palette4 <- c("#981FAC","#FF006A","#FE4C35","#FE9900")
+palette2 <- c("#981FAC","#FF006A")
+palette_9_colors <- c("#FF2AD4","#E53AD8","#CC4ADC","#996AE5","#7F7BE9",
+                      "#668BED","#33ABF6","#19BBFA","#00CCFF")
+palette_3_colors <- c("#FF2AD4","#7F7BE9","#00CCFF")
+palette_2_colors <- c("#FF2AD4", "#00CCFF")
+palette_1_colors <- c("#00CCFF")
+
 ```
 
 ## Loading Data
 
-You can also embed plots, for example:
+Loading data from box:
 
 ```{r loading box data, echo=FALSE}
 
 
 
-```
-
-``` {r Structures Conversion}
-
-structureFire_sf <- structureFire%>%
-  drop_na(Longitude, Latitude)%>%
-  st_as_sf(coords = c("Longitude", "Latitude"),
-           crs = "EPSG:4326")
-
-min(structureFire$`Alarm Date`)
-
-g(structureFire_sf)
+g(structureFire)
 
 ```
-## Geometry
+```{r Fires Count}
+
+structureFire_sf_address <-
+  structureFire_sf %>%
+  unite(address, c('Address Number', 'Street Prefix', 'Street Name', 'Street Type'), sep = " ", remove = FALSE, na.rm=TRUE)
+
+#Count the number of Fires per address
+nFires_perAddress <- structureFire_sf_address%>%
+  st_drop_geometry()%>%
+  count(address, sort=TRUE)%>%
+  left_join(dplyr::select(structureFire_sf_address, address), by="address", na.rm=TRUE)%>%
+  st_as_sf()
+
+#remove duplicates from above
+nFires_perAddress <- nFires_perAddress[!duplicated(nFires_perAddress$address),]
+
+nFires_perAddress%>%
+  st_drop_geometry()%>%
+  kable()%>%
+  kable_styling()
+
+```
+
+```{r}
+
+#Plotting Places with Fires by their 311 Complaints
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='gray', color='dark gray')+  
+  geom_sf(data=nFires_perAddress, aes(color=q5(n)), alpha=0.5, size=0.1)+
+    scale_color_manual(values=palletteO, labels=qBr(nFires_perAddress, "n"))+
+  labs(title = "Fires by Quantity") +
+  mapTheme()
+
+```
+
+ACS geometry of Philadelphia
+
 ```{r ACS Data Loading}
 
 acs_vars <- c("B01001_001E")
@@ -84,9 +122,14 @@ acsTractsPHL.2020 <- get_acs(geography = "tract",
                              geometry = TRUE, 
                              state = "PA", 
                              county = "Philadelphia", 
-                             output = "wide") 
+                             output = "wide")%>%
+  st_set_crs("EPSG:4326")
+
+  
 
 ```
+
+311 Call data
 
 ```{r loading 311 data, echo=FALSE}
 
@@ -101,7 +144,9 @@ g(All311)
 
 ``` {r 311 filter}
 
-Property311 <- filter(All311, 
+#Filtering to only the fire/building-relevant terms
+
+property311 <- filter(All311, 
                         service_name == "Building Dangerous" |  
                         service_name == "Dangerous Building Complaint " |  
                         service_name == "Fire Safety Complaint" | 
@@ -117,9 +162,99 @@ Property311 <- filter(All311,
   st_as_sf(coords = c("lon", "lat"),
            crs = "EPSG:4326")
 
-min(Property311$requested_datetime)
+g(property311)
 
 ```
+
+## Combining data
+
+``` {r Structures Conversion}
+
+g(structureFire_sf)
+
+
+#311 and OPA Join to Fires
+#what is duplicated? Only 
+Fires_311 <- structureFire_sf_address %>%
+  left_join(st_drop_geometry(property311), by="address")
+g(Fires_311)
+
+#Summarize by incident count, assuming duplications are a result of 311
+IncidentCount311 <- Fires_311%>%
+  group_by(address)%>%
+  summarize(count(address))
+
+
+
+
+
+#Count the number of 311's per address
+nFires311_perAddress <- Fires_311%>%
+  count(address, sort=TRUE)
+
+nFires311_perAddress%>%
+  count(is.na(objectid))
+
+g(Fires_311)
+
+Fires_311%>%
+  st_drop_geometry()
+
+  count(Fires_311, `Incident Number`, sort=TRUE)
+
+  
+
+#Finding those repeats of greater than 20
+IncidentCount311_20Plus <- IncidentCount311 %>%
+  arrange(desc(Count))%>%
+  filter(Count > 20)
+ 
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='gray', color='dark gray')+
+  geom_sf(data=IncidentCount311_20Plus, aes(color=q5(Count)), alpha=0.5)+
+    scale_color_manual(values=palletteO, labels=qBr(IncidentCount311_20Plus, "Count"))+
+  labs(title = "Fires with above 20x 311 Complaints",
+         y = "Rate", x = "Race") +
+  mapTheme()
+
+#Plotting Places with Fires by their 311 Complaints
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='gray', color='dark gray')+  
+  geom_sf(data=nFires311_perAddress, aes(color=q5(n)), alpha=0.5, size=0.1)+
+    scale_color_manual(values=palletteO, labels=qBr(nFires311_perAddress, "n"))+
+  labs(title = "Locations with Fires by 311 Complaints") +
+  mapTheme()
+
+
+
+
+
+```
+
+
+
+```{r 311 Table}
+
+IncidentCount311 %>%
+  arrange(desc(Count))%>%
+  kable()%>%
+  kable_styling()
+
+```
+
+```{r Subsetting SFS for high incident reports}
+
+FireOutliers <-
+IncidentCount311 %>%
+  filter(Count > 50)
+
+Fire50x311Plus <- structureFire_sf_address%>%
+  filter(`Incident Number` %in% FireOutliers$`Incident Number`)
+
+
+
+```
+
 
 
 ``` {r 311 Viz: Bar Charts}
@@ -155,6 +290,66 @@ ggplot()+
   labs(title = "Number of Airbnb per Neighborhood", subtitle = "Amsterdam, NL; 2018")+
   mapTheme()
 
+
+
+
+```
+
+```{r OPA Upload and building counts}
+
+AllOPA <- read_csv("D:/MUSA/MUSASpring/M8040_Practicum/Data/opa_properties_public.csv")
+
+
+OPA_sf <- AllOPA%>%
+  drop_na(lng, lat)%>%
+  st_as_sf(coords = c("lng", "lat"),
+           crs = "EPSG:4326")
+
+```
+
+```{r OPA building counts}
+
+OPA_sfCodeCounts <- OPA_sf %>%
+  st_drop_geometry()%>%
+  group_by(building_code_description)%>%
+  summarize(n=n())%>%
+  arrange(desc(n))
+  
+OPA_sfCodeCountsLimit <- OPA_sfCodeCounts%>%
+  group_by(building_code_description)
+
+subset(OPA_sf, building_code_description %in% OPA_sfCodeCountsLimit$building_code_description)%>%
+ggplot()+
+  geom_bar(mapping=aes(x=building_code_description))+
+  labs(title = "Top 10 Types of Buildings in PA",
+         y = "Count", x = "Description") +
+    plotTheme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+```
+
+``` {r OPA and 311}
+g(OPA_sf)
+
+
+  
+
+property311Join <- Property311 %>%
+  rename(location = address)%>%
+  st_drop_geometry()%>%
+  drop_na(location)
+  
+g(property311Join)
+
+OPA311InnerJoin <- OPA_sf%>%
+  inner_join(property311Join, by='location')%>%
+  drop_na(location)
+
+g(structureFire)
+
+g(OPA311InnerJoin)
 
 
 
