@@ -1,0 +1,474 @@
+---
+title: "311 Edit File"
+author: "Ben Keel"
+date: "2023-01-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning=FALSE)
+knitr::opts_chunk$set(message=FALSE)
+
+```
+
+## Libraries & Set Up
+
+```{r libraries & loading data, warning=FALSE, message=FALSE}
+
+library(tidyverse)
+library(tidycensus)
+library(kableExtra)
+library(caret)
+library(knitr) 
+library(pscl)
+library(plotROC)
+library(pROC)
+library(lubridate)
+library(broom)
+library(stargazer)
+library(ggplot2)
+library(gridExtra)
+library(janitor)
+library(sf)
+library(viridis)
+library(ggthemes)
+
+library(gganimate)
+
+library(transformr)
+library(gifski)
+library(rmapshaper)
+
+library(boxr)
+library(lubridate)
+
+options(scipen=999)
+options(tigris_class = "sf")
+ 
+g<-glimpse
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+
+crs <- "EPSG:4326"
+PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West Coast
+
+
+census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
+
+palletteO <- c("#fef0d9","#fdcc8a","#fc8d59","#e34a33","#b30000")
+
+
+palette5 <- c("#981FAC","#CB0F8B","#FF006A","#FE4C35","#FE9900")
+palette4 <- c("#981FAC","#FF006A","#FE4C35","#FE9900")
+palette2 <- c("#981FAC","#FF006A")
+palette_9_colors <- c("#FF2AD4","#E53AD8","#CC4ADC","#996AE5","#7F7BE9",
+                      "#668BED","#33ABF6","#19BBFA","#00CCFF")
+palette_3_colors <- c("#FF2AD4","#7F7BE9","#00CCFF")
+palette_2_colors <- c("#FF2AD4", "#00CCFF")
+palette_1_colors <- c("#00CCFF")
+
+creditFire <- "Source: Philadelphia Fire Department"
+
+```
+
+
+### ACS geometry of Philadelphia
+
+```{r ACS Data Loading}
+
+acs_vars <- c("B01001_001E")
+
+acsTractsPHL.2020 <- get_acs(geography = "tract",
+                             year = 2020, 
+                             variables = acs_vars, 
+                             geometry = TRUE, 
+                             state = "PA", 
+                             county = "Philadelphia", 
+                             output = "wide")%>%
+  st_set_crs("EPSG:4326")
+
+  
+
+```
+
+
+## Loading Data
+
+Loading data from box:
+
+```{r loading box data, echo=FALSE}
+
+#Box Upload Philadelphia Structure Fire
+
+
+```
+
+
+
+
+
+```{r Coversion to address}
+
+structureFire_sf_address <-
+  structureFire_sf %>%
+  unite(address, c('Address Number', 'Street Prefix', 'Street Name', 'Street Type', 'Apt Room'), sep = " ", remove = TRUE, na.rm=TRUE)
+
+#Taking out duplicate incident numbers
+structureFire_sf_addressU <- 
+    structureFire_sf_address[!duplicated(structureFire_sf_address$`Incident Number`),]
+
+#Taking out spots with geometry outside the US
+structureFire_sf_addressUC <- 
+    structureFire_sf_addressU[acsTractsPHL.2020,]
+
+
+```
+
+```{r Fires Count}
+
+#Count the number of Fires per address
+nFires_perAddress <- structureFire_sf_addressUC%>%
+  st_drop_geometry()%>%
+  count(address, sort=TRUE)%>%
+  left_join(dplyr::select(structureFire_sf_address, address), by="address", na.rm=TRUE)%>%
+  st_as_sf()
+
+#remove duplicates from above
+nFires_perAddress <- nFires_perAddress[!duplicated(nFires_perAddress$address),]
+
+#Barplot of counts, by count
+nFires_perAddress%>%
+  filter(n < 9)%>%
+  ggplot()+
+  geom_bar(mapping=aes(x=as.factor(n)), fill='gray')+
+  labs(title="Number of Fires Per Address",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Count of Fires")+
+  ylab("Number of Structures")+
+  theme(panel.background = element_blank())
+
+#Chart of Fire Counts per address
+nFires_perAddress%>%
+  st_drop_geometry()%>%
+    gather(Variable, value, -n) %>%
+    group_by(n)%>%
+    summarize(NumberOfFires = n())%>%
+  kable()%>%
+  kable_styling()
+
+
+  
+```
+### Counts Over Time
+```{r}
+
+sFire_sf_yq <- structureFire_sf_addressU %>%
+  mutate(Alarm_Q = quarter(`Alarm Date`, with_year = FALSE))
+
+
+#Line plot of Fires per quarter, Min to Max
+sFire_sf_yq %>%
+  ggplot(aes(x=as_date(floor_date(`Alarm Date`, unit="quarter")), fill=Alarm_Q)) +
+      geom_bar()+
+      labs(title = "Quarterly Count of Unique Fire Incidents",
+           subtitle = "Philadelphia County, 2009 Q1 - 2022 Q4", 
+           y = "Number of Fires")+   
+    scale_x_date(name = "Year", date_breaks = "1 year")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### Map Over Time
+```{r}
+
+#Map the Fires, per Year
+fireMap <- ggplot() +
+  geom_sf(data=acsTractsPHL.2020, fill='gray', color='dark gray')+
+  geom_sf(data=structureFire_sf_addressUC, alpha =  0.5, size = 0.1, color='red')+
+  labs(title = "Quarterly Count of Unique Fire Incidents",
+       subtitle = "Philadelphia County, 2009 Q1 - 2022 Q4", 
+       y = "Number of Fires")+
+  mapTheme()
+
+fireAnim1 <- fireMap +
+  transition_time(as_date(year(`Alarm Date`)))
+
+fireAnim1
+
+```
+
+
+### Map of Outliers
+
+We will classify an outlier as an observation more than 3 standard deviations away from the population mean.
+
+The mean number of fires per location is 1.115, weighted by the large amount of places where only 1 fire has occurred. The standard deviation of this fire population is 0.521. The result, 2.678, means any of the 293 locations with three or more fires will be classified as an outlier. Where are these outliers, and what are their characteristics?
+
+```{r}
+
+nFires_perAddress%>%
+  summarize(mean = mean(n), standardDev = sd(n))%>%
+  summarize(outliers = mean + 3*standardDev)
+  
+#List of counts
+nFires_perAddress%>%
+  st_drop_geometry()%>%
+  kable()%>%
+  kable_styling()
+
+
+```
+
+
+
+```{r Map of Outliers}
+
+nFires_perAddress_Outliers <- filter(nFires_perAddress, n>2)
+
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='gray', color='dark gray')+
+  geom_sf(data=nFires_perAddress_Outliers, aes(color=q5(n)), alpha=0.5)+
+    scale_color_manual(values=palletteO, labels=qBr(nFires_perAddress_Outliers, "n"))+
+  labs(title = "Addresses With 3+ Fires") +
+  mapTheme()
+
+```
+
+```{r Characteristics of Outliers}
+
+#Select addresses with details: Building Status, Structure Type, Property Use and add them to the count
+nFires_perAddress_Build <- nFires_perAddress_Outliers %>%
+  left_join(st_drop_geometry(dplyr::select(structureFire_sf_addressU, `Building Status`, `Structure Type`, `Property Use`, address)), by="address")
+
+#There are 293 
+g(nFires_perAddress_Build)
+
+#Plot the Building Types and Structure Types among properties with 3+ fires
+dplyr::select(nFires_perAddress_Build, -address, -`Property Use`)%>%
+  st_drop_geometry()%>%
+  gather(Variable, value, -n)%>%
+  count(Variable, value, value)%>%
+  group_by(Variable)%>%
+  ggplot(., aes(value, n))+
+      geom_bar(position = "dodge", stat="identity") +
+      facet_wrap(~Variable, scales="free") +
+      labs(x="Category", y="Frequency",
+           title = "Type of Buildings Among Outliers",
+           subtitle = "Buildings with 3+ Fires, 2009-2022")
+
+```
+
+
+
+```{r}
+#Plotting the Frequency of Fires based on the Outliers' property use
+
+dplyr::select(nFires_perAddress_Build, -address, -`Building Status`, -`Structure Type`)%>%
+  st_drop_geometry()%>%
+  gather(Variable, value, -n)%>%
+  count(Variable, value)%>%
+  group_by(Variable)%>%
+  ggplot(., aes(value, n))+
+      geom_bar(position = "dodge", stat="identity") +
+      facet_wrap(~Variable, scales="free") +
+      labs(x="Category", y="Frequency",
+           title = "Type of Buildings Among Addresses with 3+ Fires",
+           subtitle = "Categorical features")+
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r Property Use All Fires}
+
+#Building Use for All Fires
+#Plotting the Frequency of Fires based on Property Use
+
+nFires_perAddress_BuildAll <- nFires_perAddress %>%
+  left_join(st_drop_geometry(dplyr::select(structureFire_sf_addressU, `Building Status`, `Structure Type`, `Property Use`, address)), by="address")
+
+
+#Bar plot of property use counts
+dplyr::select(nFires_perAddress_BuildAll, -address, -`Building Status`, -`Structure Type`)%>%
+  st_drop_geometry()%>%
+  gather(Variable, value, -n)%>%
+  count(Variable, value)%>%
+  group_by(Variable)%>%
+  filter(n > 150)%>%
+  ggplot(., aes(value, n))+
+      geom_bar(position = "dodge", stat="identity") +
+      labs(x="Category", y="Frequency",
+           title = "Top 10 Property Uses Among All Structure Fires",
+           subtitle = "Philadelphia County, 2009-2022")+
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Chart of property use counts
+dplyr::select(nFires_perAddress_BuildAll, -address, -`Building Status`, -`Structure Type`)%>%
+  st_drop_geometry()%>%
+  gather(Variable, value, -n)%>%
+  count(Variable, value, sort = TRUE)%>%
+  group_by(Variable)%>%
+  summarize(`Property Use` = value, Total = n)%>%
+  dplyr::select(`Property Use`, Total)%>%
+  kable()%>%
+  kable_styling()
+
+#Bar plot of Building Status counts
+dplyr::select(nFires_perAddress_BuildAll, -address, -`Property Use`, -`Structure Type`)%>%
+  st_drop_geometry()%>%
+  gather(Variable, value, -n)%>%
+  count(Variable, value)%>%
+  group_by(Variable)%>%
+  ggplot(., aes(value, n))+
+      geom_bar(position = "dodge", stat="identity") +
+      labs(x="Category", y="Frequency",
+           title = "Building Status Among All Structure Fires",
+           subtitle = "Philadelphia County, 2009-2022")+
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Chart of Building Status counts
+dplyr::select(nFires_perAddress_BuildAll, -address, -`Property Use`, -`Structure Type`)%>%
+  st_drop_geometry()%>%
+  gather(Variable, value, -n)%>%
+  count(Variable, value, sort = TRUE)%>%
+  group_by(Variable)%>%
+  summarize(`Building Status` = value, Total = n)%>%
+  dplyr::select(`Building Status`, Total)%>%
+  kable()%>%
+  kable_styling()
+
+```
+
+```{r Share of Property Use Amongst Super Categories}
+
+#Count Fires by PropUse and Add Super Category column
+nFires_perAddress_PropUse <- nFires_perAddress %>%
+  left_join(st_drop_geometry(dplyr::select(structureFire_sf_addressU,`Property Use`, address)), by="address")%>%
+  mutate(Property_Use_SuperCat = substr(`Property Use`, 1, 1))
+
+
+g(nFires_perAddress_PropUse)
+
+#Chart of Building Status counts
+dplyr::select(nFires_perAddress_PropUse, -address, -`Property Use`)%>%
+  st_drop_geometry()%>%
+  gather(Variable, value, -n)%>%
+  count(Variable, value, sort = TRUE)%>%
+  group_by(Variable)%>%
+  summarize(`Property Use Supercategory` = value, `Share (%)` = round((n/sum(n)*100), 2))%>%
+  kable()%>%
+  kable_styling()
+
+```
+
+
+```{r Map of Severity}
+#Using Type as a measure of severity
+
+nFires_perType <-  structureFire_sf_address%>%
+  st_drop_geometry()%>%
+  count(`Incident Type`, sort=FALSE)
+
+
+
+nFires_perAddress %>%
+  dplyr::select()
+
+
+
+```
+
+
+```{r}
+
+#Plotting Places with Fires
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='gray', color='dark gray')+  
+  geom_sf(data=nFires_perAddress, aes(color=q5(n)), alpha=0.5, size=0.1)+
+    scale_color_manual(values=palletteO, labels=qBr(nFires_perAddress, "n"))+
+  labs(title = "Fires by Quantity") +
+  mapTheme()
+
+```
+
+### Cad Nature Code Description
+
+``` {r CAD Nature Code Description}
+
+#Count the unique values for CAD
+nFires_CADDescr <- structureFire_sf_addressUC %>%
+  st_drop_geometry%>%
+  count(`CAD Nature Code Description`, sort=TRUE)
+
+nFires_CADDescr%>%
+  kable()%>%
+  kable_styling()
+
+#Barplot of counts, by count
+nFires_CADDescr%>%
+  filter(n>50)%>%
+  ggplot()+
+  geom_col(mapping=aes(x=`CAD Nature Code Description`, y=n), fill='gray')+
+  labs(title="Frequency of Fire Types",
+       subtitle="Philadelphia County, 2009-2022, Above 50 Unique Incidents")+
+  xlab("CAD Nature Code Description")+
+  ylab("Number of Fires")+
+            theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r Fire Damage Counts}
+
+#How to measure severity in detail beyond 
+sFire_severity <- structureFire_sf_addressUC%>%
+  st_drop_geometry()%>%
+  dplyr::select(`Incident Type`, `Minor Damage`, `Significant Damage`, `Heavy Damage`, `Extreme Damage`)%>%
+  mutate(Worst_Damage = ifelse(`Extreme Damage` > 0, "Extreme",
+                          ifelse(`Heavy Damage` > 0, "Heavy",
+                            ifelse(`Significant Damage` > 0, "Significant",
+                              ifelse(`Minor Damage` > 0, "Minor", "No Record")))))%>%
+  count(`Incident Type`, Worst_Damage)
+  
+sFire_severity
+
+table(structureFire_sf_addressUC$`Minor Damage`)
+table(structureFire_sf_addressUC$`Significant Damage`)
+table(structureFire_sf_addressUC$`Heavy Damage`)
+table(structureFire_sf_addressUC$`Extreme Damage`)
+
+ggplot(sFire_severity)+
+  geom_col(mapping=aes(x=as.factor(`Incident Type`), y=n, fill= as.factor(Worst_Damage)))+
+  labs(title = "Number of Fires by Incident Type", 
+       subtitle = "Philadelphia County, 2009-2022", 
+       caption = creditFire,
+       x="Incident Type Code",
+       y="Number of Fires")+
+  scale_fill_discrete(name = "Worst Damage \nTo Floors")+
+  theme(plot.title = element_text(size=18))
+  
+
+
+
+```
+
+
+```{r Correlation Spread and Incident Type}
+
+structureFire_sf_addressUC %>%
+  st_drop_geometry()%>%
+  count(`Incident Type`, `Fire Spread`)%>%
+  filter(`Incident Type` != 111 & `Incident Type` != 1110)%>%
+  ggplot()+
+  geom_col(mapping=aes(x=as.factor(`Incident Type`), y=n, fill=`Fire Spread`))+
+  labs(title = "Number of Fires by Incident Type, Fire Spread", 
+       subtitle = "Philadelphia County, 2009-2022", 
+       caption = creditFire,
+       x="Incident Type Code",
+       y="Number of Fires")+
+  scale_fill_discrete(name = "Fire Spread \nConfined To:", 
+                      labels = c("Object", "Room", "Floor", "Building", "Beyond", "NA"
+  ))+
+  theme(plot.title = element_text(size=18))
+
+```

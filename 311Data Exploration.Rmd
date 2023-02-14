@@ -70,11 +70,20 @@ Loading data from box:
 
 ```{r loading box data, echo=FALSE}
 
+#Box Upload Philadelphia Structure Fire
 
+
+structureFire_sf <- structureFire%>%
+  drop_na(Longitude, Latitude)%>%
+  st_as_sf(coords = c("Longitude", "Latitude"),
+           crs = "EPSG:4326")
 
 g(structureFire)
 
 ```
+
+
+
 ```{r Fires Count}
 
 structureFire_sf_address <-
@@ -86,7 +95,9 @@ nFires_perAddress <- structureFire_sf_address%>%
   st_drop_geometry()%>%
   count(address, sort=TRUE)%>%
   left_join(dplyr::select(structureFire_sf_address, address), by="address", na.rm=TRUE)%>%
-  st_as_sf()
+  st_as_sf()%>%
+  
+  
 
 #remove duplicates from above
 nFires_perAddress <- nFires_perAddress[!duplicated(nFires_perAddress$address),]
@@ -95,6 +106,14 @@ nFires_perAddress%>%
   st_drop_geometry()%>%
   kable()%>%
   kable_styling()
+
+nFires_perType <-  structureFire_sf_address%>%
+  st_drop_geometry()%>%
+  count(address, sort=TRUE)%>%
+  left_join(dplyr::select(structureFire_sf_address, address), by="address", na.rm=TRUE)%>%
+  st_as_sf()%>%
+  
+
 
 ```
 
