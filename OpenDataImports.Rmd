@@ -1,0 +1,177 @@
+---
+title: "Open Data Imports"
+author: "Ben Keel"
+date: "2023-02-14"
+output: html_document
+---
+
+Package Set Up
+
+```{r Set Up}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning=FALSE)
+knitr::opts_chunk$set(message=FALSE)
+
+library(tidyverse)
+library(tidycensus)
+library(kableExtra)
+library(caret)
+library(knitr) 
+library(pscl)
+library(plotROC)
+library(pROC)
+library(lubridate)
+library(broom)
+library(stargazer)
+library(ggplot2)
+library(gridExtra)
+library(janitor)
+library(sf)
+library(viridis)
+
+library(boxr)
+library(lubridate)
+
+options(scipen=999)
+options(tigris_class = "sf")
+ 
+g<-glimpse
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+crs <- "EPSG:4326"
+PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West Coast
+
+
+census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
+
+palletteO <- c("#fef0d9","#fdcc8a","#fc8d59","#e34a33","#b30000")
+
+
+palette5 <- c("#981FAC","#CB0F8B","#FF006A","#FE4C35","#FE9900")
+palette4 <- c("#981FAC","#FF006A","#FE4C35","#FE9900")
+palette2 <- c("#981FAC","#FF006A")
+palette_9_colors <- c("#FF2AD4","#E53AD8","#CC4ADC","#996AE5","#7F7BE9",
+                      "#668BED","#33ABF6","#19BBFA","#00CCFF")
+palette_3_colors <- c("#FF2AD4","#7F7BE9","#00CCFF")
+palette_2_colors <- c("#FF2AD4", "#00CCFF")
+palette_1_colors <- c("#00CCFF")
+
+```
+
+ACS geometry of Philadelphia
+
+```{r ACS Data Loading}
+
+acs_vars <- c("B01001_001E")
+
+acsTractsPHL.2020 <- get_acs(geography = "tract",
+                             year = 2020, 
+                             variables = acs_vars, 
+                             geometry = TRUE, 
+                             state = "PA", 
+                             county = "Philadelphia", 
+                             output = "wide")%>%
+  st_set_crs("EPSG:4326")
+
+  
+
+```
+
+311 Call data
+
+```{r loading 311 data, echo=FALSE}
+
+#311 Data Upload, downloaded from https://data.phila.gov/visualizations/311-requests/
+
+All311 <- read_csv("D:/MUSA/MUSASpring/M8040_Practicum/Data/OpenDataPhilly-311Calls.csv")
+
+g(All311)
+
+```
+
+Filtering 311 Data to the appropriate categories
+
+``` {r 311 filter}
+
+#Filtering to only the fire/building-relevant terms
+
+property311 <- filter(All311, 
+                        service_name == "Building Dangerous" |  
+                        service_name == "Dangerous Building Complaint " |  
+                        service_name == "Fire Safety Complaint" | 
+                        service_name == "Maintenance Complaint" |
+                        service_name == "Maintenance Residential or Commercial" |
+                        service_name == "Vacant House or Commercial" |
+                        service_name == "Maintenance Residential or Commercial" |
+                        service_name == "Fire Residential or Commercial" |
+                        service_name == "Complaints against Fire or EMS" |
+                        service_name == "Vacant Lot Clean-Up" ) %>%
+  dplyr::select(objectid, service_request_id, status, service_name, service_code, requested_datetime, agency_responsible, address, zipcode, lat, lon)%>%
+  drop_na(lat, lon, address)%>%
+  st_as_sf(coords = c("lon", "lat"),
+           crs = "EPSG:4326")
+
+g(property311)
+
+```
+
+Importing OPA Data
+
+```{r OPA Upload and building counts}
+
+#Data from https://www.opendataphilly.org/dataset/opa-property-assessments
+
+#metadata at: https://metadata.phila.gov/#home/datasetdetails/5543865f20583086178c4ee5/representationdetails/55d624fdad35c7e854cb21a4/?view_287_page=3
+
+AllOPA <- read_csv("D:/MUSA/MUSASpring/M8040_Practicum/Data/OpenDataPhilly-opa_properties_public.csv")
+
+OPA_sf <- AllOPA%>%
+  drop_na(lng, lat)%>%
+  st_as_sf(coords = c("lng", "lat"),
+           crs = "EPSG:4326")
+
+g(OPA_sf)
+
+```
+
+Reducing OPA Data to relevant items
+
+```{r OPA data reduction}
+
+OPA_sf_small <- OPA_sf %>%
+  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)
+
+g(OPA_sf_small)
+
+```
+Importing Permit Data
+
+```{r Permit Data}
+
+#Data from https://www.opendataphilly.org/dataset/licenses-and-inspections-building-permits
+
+#metadata at: https://metadata.phila.gov/#home/datasetdetails/5543868920583086178c4f8f/representationdetails/5e9a01ac801624001585ca11/
+
+permits0715 <- read_csv("D:/MUSA/MUSASpring/M8040_Practicum/Data/OpenDataPhilly-permits_0715.csv")
+permits1623 <- read_csv("D:/MUSA/MUSASpring/M8040_Practicum/Data/OpenDataPhilly-permits_1623.csv")
+
+permitsAll <- rbind(permits0715, permits1623)
+
+permits_sf <- permitsAll%>%
+  drop_na(lng, lat)%>%
+  st_as_sf(coords = c("lng", "lat"),
+           crs = "EPSG:4326")
+
+g(permits_sf)
+
+```
+
+Cleaning Permit Data
+
+```{r Permit Data}
+
+
+
+```
