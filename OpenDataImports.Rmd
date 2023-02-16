@@ -29,7 +29,7 @@ library(gridExtra)
 library(janitor)
 library(sf)
 library(viridis)
-
+library(data.table)
 library(boxr)
 library(lubridate)
 
@@ -59,6 +59,32 @@ palette_2_colors <- c("#FF2AD4", "#00CCFF")
 palette_1_colors <- c("#00CCFF")
 
 ```
+
+Trying to set up a panel
+
+```{r Panel Set Up}
+
+quarter <- c("Q1", "Q2", "Q3", "Q4")
+year <- c(2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022)
+
+frame <- data.frame(year, quarter)
+
+comb <- expand.grid(year = year, quarter = quarter)%>%
+  mutate(yq = paste(year, ":", quarter))%>%
+  mutate(yqDT = yq(yq))%>%
+  arrange(yqDT)
+
+g(comb)
+
+panel <- as_tibble(comb)%>%
+  dplyr::select(yqDT)
+  
+g(comb)
+
+panel
+
+```
+
 
 ACS geometry of Philadelphia
 
@@ -141,11 +167,95 @@ Reducing OPA Data to relevant items
 ```{r OPA data reduction}
 
 OPA_sf_small <- OPA_sf %>%
-  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)
+  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)%>%
+  rename(address = location)
 
 g(OPA_sf_small)
 
+OPA_address <- OPA_sf_small%>%
+  dplyr::select(address)%>%
+  st_drop_geometry()
+
+OPA_addressSample <- OPA_address[1:100,]
+
+
+
 ```
+Combine OPA to panel
+
+```{r}
+
+panelOPA <- expand.grid(address = OPA_address$address, 
+             quarter = panel$yqDT)
+
+```
+
+Loading Fire Data
+
+```{r Loading and Cleaning Fire, message=FALSE, warning=FALSE}
+
+#Box Upload Philadelphia Structure Fire
+#INSERT BOX CODE HERE
+
+structureFire_sf <- structureFire%>%
+  drop_na(Longitude, Latitude)%>%
+  st_as_sf(coords = c("Longitude", "Latitude"),
+           crs = "EPSG:4326")%>%
+  clean_names
+
+#Conversion to address, with changes from AV to AVE
+structureFire_sf_address <-
+  structureFire_sf %>%
+  mutate(street_type = ifelse(street_type == 'AV', "AVE", street_type))%>%
+  unite(address, c(address_number, street_prefix, street_name, street_type), sep = " ", remove = TRUE, na.rm=TRUE)
+
+#Taking out duplicate incident numbers
+structureFire_sf_addressU <- 
+    structureFire_sf_address[!duplicated(structureFire_sf_address$incident_number),]
+
+```
+
+counting Fires per Quarter
+
+```{r}
+
+count.panel <- 
+  structureFire_sf_addressU %>%
+  mutate(quarter = as_date(floor_date(alarm_date, unit="quarter")))%>%
+  st_drop_geometry() %>%
+  group_by(quarter, address) %>% 
+  count(address, sort=TRUE)
+
+count.panel$address <-
+  as.factor(count.panel$address)
+
+
+g(count.panel)
+
+table(count.panel$quarter)
+table(panelOPA$quarter)
+g(panelOPA)
+
+```
+
+Combining Fire with OPA
+
+```{r}
+
+panel_OPAFire <- full_join(panelOPA, count.panel, by=c("address", "quarter")) # Join
+final.panel <- final.panel %>% dplyr::select(address, year, n.y) %>% rename(count = n.y) # Condensing & Renaming
+final.panel[is.na(final.panel)] <- 0 # Assigning NA to 0
+
+# Joining the other data
+panel_OPAFire <- left_join(panelOPA, count.panel, by=c("address", "quarter"))%>% # Join
+  panel_OPAFire$n[is.na(panel_OPAFire$n)] <- 0
+
+filter(panel_OPAFire, address == "5600 OGONTZ AVE")%>%
+  ggplot(aes(quarter, n))+
+    geom_col()
+
+```
+
 Importing Permit Data
 
 ```{r Permit Data}
@@ -163,8 +273,6 @@ permits_sf <- permitsAll%>%
   drop_na(lng, lat)%>%
   st_as_sf(coords = c("lng", "lat"),
            crs = "EPSG:4326")
-
-g(permits_sf)
 
 ```
 
