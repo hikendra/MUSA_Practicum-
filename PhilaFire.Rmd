@@ -44,14 +44,9 @@ mapTheme <- theme(plot.title =element_text(size=12),
 ```
 
 ```{r Box Set Up}
-# Set up work flow
-box_auth(client_id = "zhmuvtkofhuu21py025uhr8cffzew2om", 
-         client_secret = "k39pMJM1FUnBmGnRrM9zVUWk1eth0EVi")
-box_setwd(186732420366)
-box_getwd()
-box_ls()
-list <- box_ls() %>% as.data.frame()
-dat <- box_read_excel(1093000179542) 
+
+## INSERT BOX WORKFLOW HERE ##
+
 ```
 
 # Fire Panel - Initial, Count, and Final Panel
