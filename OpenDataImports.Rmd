@@ -163,7 +163,11 @@ Loading Fire Data
 ```{r Loading and Cleaning Fire, message=FALSE, warning=FALSE}
 
 #Box Upload Philadelphia Structure Fire
+box_auth(client_id = "7olfapklfw3aflgpeb2kopxj1jceogg0", 
+         client_secret = "xMUYd0SngtrtzGC92cZKon2jd6yyvM9d")
+box_setwd(186732420366)
 
+structureFire <- box_read_excel(1093000179542)
 
 structureFire_sf <- structureFire%>%
   drop_na(Longitude, Latitude)%>%
@@ -304,7 +308,8 @@ permits_sf <- permitsAll%>%
   st_as_sf(coords = c("lng", "lat"),
            crs = "EPSG:4326")
 
-```
+``` 
+
 
 Cleaning Permit Data and Creating Count Table
 
@@ -318,7 +323,7 @@ permits_sf_res <- permits_sf%>%
 #         permitdescription == "RESIDENTIAL BUILDING PERMIT" |
 #         permitdescription == "FAST FORM BUILDING PERMIT" |
 #         permitdescription == "ALTERATION PERMIT")%>%
-  filter(commercialorresidential != "COMMERICAL")%>%
+  filter(commercialorresidential != "COMMERCIAL")%>%
   mutate(quarter = as_date(floor_date(permitissuedate, unit="quarter")))%>%
   filter(year(quarter) >= 2009)
 
@@ -377,6 +382,13 @@ dplyr::select(filter(panel_taney$quarter %within% interval(quarter, quarter + p)
                                             (quarter + p))$n_311Vacant
                                    )>0, 1), 
                         0))
+
+```
+
+
+
+``` {r}
+
 
 
 ```
