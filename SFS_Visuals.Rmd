@@ -57,19 +57,19 @@ PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West 
 
 census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
 
-palletteO <- c("#fef0d9","#fdcc8a","#fc8d59","#e34a33","#b30000")
+palette3_sat <- c("#e19825","#d55816","#7b230b")
+palette3_desat <- c("#B19C7D","#7F5F52","#262626")
 
+palette4 <- c("#f1c82b","#e19825","#d55816","#7b230b")
+palette4_desat <- c("#B19C7D","#B27D49","#7F5F52","#262626")
 
-palette5 <- c("#981FAC","#CB0F8B","#FF006A","#FE4C35","#FE9900")
-palette4 <- c("#981FAC","#FF006A","#FE4C35","#FE9900")
-palette2 <- c("#981FAC","#FF006A")
-palette_9_colors <- c("#FF2AD4","#E53AD8","#CC4ADC","#996AE5","#7F7BE9",
-                      "#668BED","#33ABF6","#19BBFA","#00CCFF")
-palette_3_colors <- c("#FF2AD4","#7F7BE9","#00CCFF")
-palette_2_colors <- c("#FF2AD4", "#00CCFF")
-palette_1_colors <- c("#00CCFF")
+palette5_sat <- c("#f1c82b","#e19825","#d55816","#7b230b","#413028")
+pallette5_desat <- c("#ead5b7","#d2b190","#b18e6f","#7f5f52","#413028")
+
+palette7_cats <- c("#b9cfcf","#20b1ae","#e19825","#7b230b","#b47c49", "#3f3128", "#8f8172")
 
 creditFire <- "Source: Philadelphia Fire Department"
+creditOpen <- "Source: Open Data Philly"
 
 ```
 
@@ -101,7 +101,22 @@ Loading data from box:
 ```{r loading box data, echo=FALSE}
 
 #Box Upload Philadelphia Structure Fire
+#Box Upload Philadelphia Structure Fire
+box_auth(client_id = "7olfapklfw3aflgpeb2kopxj1jceogg0", 
+         client_secret = "xMUYd0SngtrtzGC92cZKon2jd6yyvM9d")
+box_setwd(186732420366)
 
+structureFire <- box_read_excel(1093000179542)
+
+g(structureFire)
+
+structureFire_sf <- structureFire%>%
+  drop_na(Longitude, Latitude)%>%
+  st_as_sf(coords = c("Longitude", "Latitude"),
+           crs = "EPSG:4326")%>%
+  clean_names
+
+g(structureFire_sf)
 
 ```
 
@@ -113,16 +128,14 @@ Loading data from box:
 
 structureFire_sf_address <-
   structureFire_sf %>%
-  unite(address, c('Address Number', 'Street Prefix', 'Street Name', 'Street Type', 'Apt Room'), sep = " ", remove = TRUE, na.rm=TRUE)
+  mutate(street_type = ifelse(street_type == 'AV', "AVE", street_type))%>%
+  unite(address, c(address_number, street_prefix, street_name, street_type), sep = " ", remove = TRUE, na.rm=TRUE)
+
+g(structureFire_sf_address)
 
 #Taking out duplicate incident numbers
 structureFire_sf_addressU <- 
-    structureFire_sf_address[!duplicated(structureFire_sf_address$`Incident Number`),]
-
-#Taking out spots with geometry outside the US
-structureFire_sf_addressUC <- 
-    structureFire_sf_addressU[acsTractsPHL.2020,]
-
+    structureFire_sf_address[!duplicated(structureFire_sf_address$incident_number),]
 
 ```
 

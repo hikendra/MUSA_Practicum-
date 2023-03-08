@@ -80,14 +80,6 @@ PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West 
 ## INSERT BOX WORKFLOW HERE ##
 
 #Box Upload Philadelphia Structure Fire
-box_auth(client_id = "7olfapklfw3aflgpeb2kopxj1jceogg0", 
-         client_secret = "xMUYd0SngtrtzGC92cZKon2jd6yyvM9d")
-
-box_setwd(186732420366)
-
-structureFire <- box_read_excel(1093000179542)
-
-g(structureFire)
 
 ```
 
@@ -469,10 +461,9 @@ opa_dat <- read_csv("../Data/OpenDataPhilly-opa_properties_public.csv")
 
 # Creating geometry for the properties
 opa_dat <- opa_dat%>%
-  drop_na(lng, lat)%>%
-  st_as_sf(coords = c("lng", "lat"),
+  drop_na(lat, lng)%>%
+  st_as_sf(coords = c("lat", "lng"),
            crs = "EPSG:4326")
-
 
 # Reducing columns
 opa_dat_small_sf <- opa_dat[!duplicated(opa_dat$location),] %>%
@@ -672,6 +663,9 @@ Importing Permit Data
 
 #metadata at: https://metadata.phila.gov/#home/datasetdetails/5543868920583086178c4f8f/representationdetails/5e9a01ac801624001585ca11/
 
+g(permits0715)
+g(permits1623)
+
 permits0715 <- read_csv("../Data/OpenDataPhilly-permits_0715.csv")
 permits1623 <- read_csv("../Data/OpenDataPhilly-permits_1623.csv")
 
@@ -690,15 +684,15 @@ Cleaning Permit Data and Creating Count Table
 
 permits_sf_res <- permits_sf%>%
   dplyr::select(permittype, permitdescription, permitissuedate, commercialorresidential, address)%>%
-#  filter(permitdescription == "DEMOLITION PERMIT" |
-#         permitdescription == "GENERAL PERMIT" |
-#         permitdescription == "NEW CONTRUCTION PERMIT" |
-#         permitdescription == "RESIDENTIAL BUILDING PERMIT" |
-#         permitdescription == "FAST FORM BUILDING PERMIT" |
-#         permitdescription == "ALTERATION PERMIT")%>%
-  filter(commercialorresidential != "COMMERCIAL")%>%
-  mutate(quarter = as_date(floor_date(permitissuedate, unit="quarter")))%>%
-  filter(year(quarter) >= 2009)
+ # filter(permitdescription == "DEMOLITION PERMIT" |
+ #        permitdescription == "GENERAL PERMIT" |
+ #        permitdescription == "NEW CONTRUCTION PERMIT" |
+ #        permitdescription == "RESIDENTIAL BUILDING PERMIT" |
+ #        permitdescription == "FAST FORM BUILDING PERMIT" |
+ #        permitdescription == "ALTERATION PERMIT")%>%
+  mutate(quarter = as_date(floor_date(permitissuedate, unit="quarter")))
+
+table(permits1623$commercialorresidential)
 
 permits_count <- permits_sf_res %>%
   st_drop_geometry()%>%
@@ -707,9 +701,7 @@ permits_count <- permits_sf_res %>%
   rename(n_permits = n)
 
 permits_count%>%
-  group_by(quarter)%>%
-  summarize(count = sum(n_permits))%>%
-  ggplot(aes(x=quarter, y=count))+
+  ggplot(aes(x=quarter, y=n_permits))+
   geom_col(fill="#A5300F")+
     labs(title="Permit Records",
        subtitle="Philadelphia County, 2009-2022")+
@@ -720,6 +712,15 @@ permits_count%>%
 
 ```
 
+### Transfer Data
+
+```{r Join }
+
+transfers <- read_csv("../Data/OpenDataPhilly-transfers.csv")
+
+g(transfers)
+
+```
 ### Joining Open Data to Existing Panel
 
 ```{r Join 311 and Permits to panel_FireOPA}
@@ -782,13 +783,9 @@ panelResults_Positive %>%
     panel.background = element_rect(fill = "#f3efe0"))
   
 
-
 ```
 
 ```{r Vacancies vs Total}
-
-g(opaFireVacant_PlotData)
-g(acsTractsPHL.2020)
 
 opa_dat_small_sf_join <- opa_dat_small_sf %>%
   dplyr::select(address)
@@ -799,22 +796,28 @@ opaFireVacant_PlotData <- opa_dat_small_sf_join %>%
   st_as_sf%>%
   st_set_crs("EPSG:4326")
 
-st_crs(acsTractsPHL.2020)
-
 opaFireVacant_PlotData <-
-  opaFireVacant_PlotData[acsTractsPHL.2020,]
-  
-  
-opaFireVacant_PlotData%>%
-  ggplot()+
-  geom_sf(fill = "black")%>%
-  st_as
+  opaFireVacant_PlotData[acsTractsPHL.2020,]%>%
+  mutate(year = year(quarter))
+
+g(opaFireVacant_PlotData)
+
+table(opaFireVacant_PlotData$year)
 
 ggplot()+
   geom_sf(data=acsTractsPHL.2020, fill='#f0efe0', color='dark gray')+
-  geom_sf(data=opaFireVacant_PlotData, color='red', alpha=0.5)+
-    scale_color_viridis_c()+
-  labs(title = "Addresses With 3+ Fires") +
+  geom_sf(data=opaFireVacant_PlotData, aes(color=year), alpha=0.5)+
+  scale_color_viridis_c()+
+  labs(title = "Fires with Vacancy Complaints within 6 Months") +
+  mapTheme()
+
+
+
+
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='#f0efe0', color='dark gray')+
+  geom_sf(data=vacantLI, color="red", alpha=0.25, size=0.2)+
+  labs(title = "Fires with Vacancy Complaints within 6 Months") +
   mapTheme()
 
 ```
@@ -839,5 +842,32 @@ panelResults_Positive %>%
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
   
+
+```
+
+```{r}
+
+g(panelResults_Positive)
+
+opaFirePermit_PlotData <- opa_dat_small_sf_join %>%
+  left_join(filter(panelResults_Positive, firePermit2Q > 0), by="address")%>%
+  drop_na(firePermit2Q, geometry)%>%
+  st_as_sf%>%
+  st_set_crs("EPSG:4326")
+
+opaFirePermit_PlotData <-
+  opaFirePermit_PlotData[acsTractsPHL.2020,]%>%
+  mutate(year = year(quarter))
+
+g(opaFirePermit_PlotData)
+
+table(opaFirePermit_PlotData$year)
+
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='#f0efe0', color='dark gray')+
+  geom_sf(data=opaFirePermit_PlotData, aes(color=year), alpha=0.5)+
+  scale_color_viridis_c()+
+  labs(title = "Fires with L&I Permits within 6 Months") +
+  mapTheme()
 
 ```
