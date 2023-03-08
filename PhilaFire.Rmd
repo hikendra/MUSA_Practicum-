@@ -513,7 +513,7 @@ ogontz <-
 
 ## Adding Open Data
 
-### 311 Call Data
+### 311 Vacancy and L&I Data
 
 ```{r loading 311 data, echo=FALSE}
 
@@ -529,19 +529,6 @@ Filtering 311 Data to the appropriate categories
 
 ``` {r 311 filter}
 
-#Filtering to only the fire/building-relevant terms
-g(AllLI)
-
-# test311 <- LI%>%
-#   #filter(grepl("Vacant Property", subject, fixed = TRUE))%>%
-#   #filter(agency_responsible == "License & Inspections")%>%
-#   filter(requested_datetime > 2020-01-01)%>%
-#     dplyr::select(subject, objectid, service_request_id, status, service_name, service_code, requested_datetime, agency_responsible, address, zipcode, lat, lon)%>%
-#   drop_na(lat, lon, address)%>%
-#   st_as_sf(coords = c("lon", "lat"),
-#            crs = "EPSG:4326")%>%
-#   mutate(quarter = floor_date(requested_datetime, unit="quarter"))
-  
 #strictly filtering to vacancy complaints for initial combination
 property311 <- filter(All311, 
                         #service_name == "Building Dangerous" |  
@@ -552,10 +539,42 @@ property311 <- filter(All311,
                         service_name == "Vacant House or Commercial" ) %>%
                         #service_name == "Fire Residential or Commercial" |
                         #service_name == "Complaints against Fire or EMS"
-  dplyr::select(subject, objectid, service_request_id, status, service_name, service_code, requested_datetime, agency_responsible, address, zipcode, lat, lon)%>%
+  dplyr::select(service_request_id, service_name, requested_datetime, address, lat, lon)%>%
   drop_na(lat, lon, address)%>%
   st_as_sf(coords = c("lon", "lat"),
-           crs = "EPSG:4326")
+           crs = "EPSG:4326")%>%
+  mutate(quarter = as_date(floor_date(requested_datetime, unit="quarter")))
+
+
+vacant311_count <- property311%>%
+  st_drop_geometry%>%
+  drop_na(address)%>%
+  group_by(address, quarter)%>%
+  count(address, sort=TRUE)%>%
+  rename(n_Vacant = n,
+         address = address,
+         quarter = quarter)
+  
+vacant311_count$address <- as.factor(vacant311_count$address)  
+
+vacant311_count%>%
+  group_by(quarter)%>%
+  summarize(count = sum(n_311Vacant))%>%
+  ggplot(aes(x=quarter, y=count))+
+  geom_col(fill="#A5300F")+
+    labs(title="311 Vacancy Complaints",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Date, Rounded to Beginning of Quarter")+
+  ylab("Number of Fires")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+#Data is now ready to join with panel
+
+```
+
+
+``` {r LI filter}
 
 #strictly filtering to vacancy complaints for initial combination
 vacantLI <- filter(AllLI, 
@@ -572,87 +591,46 @@ vacantLI_count <- vacantLI%>%
   drop_na(address)%>%
   group_by(address, quarter)%>%
   count(address, sort=TRUE)%>%
-  rename(n_LIVacant = n,
+  rename(n_Vacant = n,
          address = address,
          quarter = quarter)
   
 vacantLI_count$address <- as.factor(vacantLI_count$address)  
-
-#strictly filtering to vacancy complaints for initial combination
-property311 <- filter(All311, 
-                        #service_name == "Building Dangerous" |  
-                        #service_name == "Dangerous Building Complaint " |  
-                        #service_name == "Fire Safety Complaint" | 
-                        #service_name == "Maintenance Complaint" |
-                        #service_name == "Maintenance Residential or Commercial" |
-                        service_name == "Vacant House or Commercial" ) %>%
-                        #service_name == "Fire Residential or Commercial" |
-                        #service_name == "Complaints against Fire or EMS"
-  dplyr::select(subject, objectid, service_request_id, status, service_name, service_code, requested_datetime, agency_responsible, address, zipcode, lat, lon)%>%
-  drop_na(lat, lon, address)%>%
-  st_as_sf(coords = c("lon", "lat"),
-           crs = "EPSG:4326")
-
-g(property311)
-
-table(property311$subject)
-
-g(vacantLI_count)
-filter(vacantLI_count, address == "1756 N TANEY ST")
-
-# #Reducing variables and calculating the quarter of the calls
-# prop311_small <- property311%>%
-#   dplyr::select(service_name, requested_datetime, address)%>%
-#   st_drop_geometry()%>%
-#   mutate(quarter = floor_date(requested_datetime, unit="quarter"))
-# 
-# #counting the calls per address per quarter
-# vacant311_count <- prop311_small%>%
-#   st_drop_geometry%>%
-#   group_by(address, quarter)%>%
-#   count(address, sort=TRUE)%>%
-#   rename(n_311Vacant = n)
 
 vacantLI_count%>%
   group_by(quarter)%>%
   summarize(count = sum(n_LIVacant))%>%
   ggplot(aes(x=quarter, y=count))+
   geom_col(fill="#A5300F")+
-    labs(title="311 Vacancy Calls",
+    labs(title="L&I Vacancy Complaints",
        subtitle="Philadelphia County, 2009-2022")+
   xlab("Date, Rounded to Beginning of Quarter")+
   ylab("Number of Fires")+
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
 
-# vacant311_count%>%
-#   group_by(quarter)%>%
-#   summarize(count = sum(n_311Vacant))%>%
-#   ggplot(aes(x=quarter, y=count))+
-#   geom_col(fill="#A5300F")+
-#     labs(title="311 Vacancy Calls",
-#        subtitle="Philadelphia County, 2009-2022")+
-#   xlab("Date, Rounded to Beginning of Quarter")+
-#   ylab("Number of Fires")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-#     panel.background = element_rect(fill = "#f3efe0"))
-
-# vacant311_count%>%
-#   group_by(quarter, service_name)%>%
-#   summarize(count = sum(n_311Vacant))%>%
-#   ggplot(aes(x=quarter, y=count, fill=service_name))+
-#   geom_col(position = "dodge")+
-#     labs(title="Frequency Vacancy Reports",
-#        subtitle="Philadelphia County, 2009-2022, Above 50 Unique Incidents")+
-#   xlab("Date, Rounded to Beginning of Quarter")+
-#   ylab("Number of Fires")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-#     panel.background = element_rect(fill = "#f3efe0"))
-
 #Data is now ready to join with panel
 
 ```
 
+```{r}
+
+vacantLI311 <- rbind(vacantLI_count, vacant311_count)
+g(vacantLI311)
+
+vacantLI311%>%
+  group_by(quarter)%>%
+  summarize(count = sum(n_Vacant))%>%
+  ggplot(aes(x=quarter, y=count))+
+  geom_col(fill="#A5300F")+
+    labs(title="L&I Vacancy Complaints",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Date, Rounded to Beginning of Quarter")+
+  ylab("Number of Fires")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+```
 ### L&I Permit Data
 
 Importing Permit Data
@@ -710,52 +688,142 @@ permits_count%>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
 
+
 ```
 
-### Transfer Data
+### Real Estate Transfer Data
 
 ```{r Join }
 
 transfers <- read_csv("../Data/OpenDataPhilly-transfers.csv")
 
-g(transfers)
+#Select relevant fields and filter to fire data range
+transfers_data <- transfers%>%
+  dplyr:: select(objectid, recording_date, street_address, document_type)%>%
+  filter(year(recording_date) > 2008,
+         !is.na(street_address))%>%
+  rename(address = street_address)%>%
+  mutate(quarter = as_date(floor_date(recording_date, unit="quarter")))
 
 ```
+
+```{r}
+
+transfers_count <- transfers_data %>%
+  group_by(address, quarter)%>%
+  count(address, sort = TRUE)%>%
+  rename(n_transfers = n)
+
+transfers_count%>%
+  ggplot(aes(x=quarter, y=n_transfers))+
+  geom_col(fill="#A5300F")+
+    labs(title="Real Estate Transfer Records",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Date, Rounded to Beginning of Quarter")+
+  ylab("Number of Records")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+g(transfers_count)
+
+```
+
 ### Joining Open Data to Existing Panel
 
 ```{r Join 311 and Permits to panel_FireOPA}
 
-panel_OPAFire311 <- left_join(opa_count.panel, vacantLI_count, by=c("address", "quarter"))
+panel_OPAFire311 <- left_join(opa_count.panel, vacantLI311, by=c("address", "quarter"))
 
-panel_OPAFire311$n_LIVacant[is.na(panel_OPAFire311$n_LIVacant)] <- 0
+panel_OPAFire311$n_Vacant[is.na(panel_OPAFire311$n_Vacant)] <- 0
 
 panel_OPAFire311Permit <- left_join(panel_OPAFire311, permits_count, by=c("quarter", "address"))
 
 panel_OPAFire311Permit$n_permits[is.na(panel_OPAFire311Permit$n_permits)] <- 0
 
+panel_OPAFireOpenData <- left_join(panel_OPAFire311Permit, transfers_count, by=c("quarter", "address"))
+
+panel_OPAFireOpenData$n_transfers[is.na(panel_OPAFireOpenData$n_transfers)] <- 0
+
 ```
 
 # Calculating Outcomes
 
+```{r Calculate Average Quarters Until Result}
+
+#if fire or outcome, then keep address
+#if outcome, then outcome time minus fire time
+#Average outcome time
+
+#filter panel to just outcomes or fires
+panel_Positives <- panel_OPAFireOpenData %>%
+  filter(count > 0 | n_Vacant > 0 | n_permits > 0 | n_transfers > 0)
+
+#filter to just fires, then combine those addresses with additional outcomes and building categories
+panel_FirePositives <- panel_OPAFireOpenData %>%
+  filter(count > 0)%>%
+  select(address)%>%
+  distinct(address, .keep_all = TRUE)%>%
+  left_join(panel_Positives, by="address")%>%
+  left_join(dplyr::select(opa_dat_small_sf, address, category_code_description), by="address")%>%
+  st_drop_geometry()
+  #mutate(diff = interval(lag(quarter, n=1),quarter) %/% years(1))    
+
+#only start with fires
+panel_FirePositives <- panel_FirePositives%>%
+  group_by(address)%>%
+  mutate(f = cumsum(count))%>%
+  filter(f > 0)%>%
+  dplyr::select(-f)
+
+#Join to get fire incident number and date
+#calculate the difference between the quarter of the incident date and the quarter of the outcome
+
+panel_FirePositivesDiff <- panel_FirePositives%>%
+  left_join(st_drop_geometry(dplyr::select(dat, incident_number,address, quarter)), by=c("address"))%>%
+  group_by(incident_number)%>%
+  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1))%>%
+  filter(mSinceFire >= -1)
+
+#For every outcome, what is the median time since a fire occurred?
+panel_FirePositivesDiff%>%
+  ungroup()%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_Vacant, n_permits, n_transfers, mSinceFire)%>%
+  gather(Variable, value, -mSinceFire)%>%
+  filter(value > 0)%>%
+  group_by(Variable)%>%
+  summarize(`Median Months Since Fire` = median(mSinceFire))%>%
+  kable()%>%
+  kable_styling()
+
+
+```
+
 
 ```{r Calculate 6 months after}
 
-panel_Results <- panel_OPAFire311Permit %>%
+panel_Results <- panel_OPAFireOpenData %>%
     mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
                                (count > 0 | lag(count, n=1) > 0) &
                                 (n_LIVacant > 0) > 0 , 1, 0),
            firePermit2Q = ifelse(address == lag(address, n=1) & 
                                (count > 0 | lag(count, n=1) > 0) &
-                                (n_permits > 0) > 0 , 1, 0),)
+                                (n_permits > 0) > 0 , 1, 0),
+          fireTransfer2Q = ifelse(address == lag(address, n=1) & 
+                     (count > 0 | lag(count, n=1) > 0) &
+                      (n_transfers > 0) > 0 , 1, 0))
+
 
 panelResults_Positive <- panel_Results%>%
-  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0)
+  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0 | fireTransfer2Q > 0)
 
 results_summary <- panel_Results%>%
-  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0)%>%
+  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0 | fireTransfer2Q > 0)%>%
   summarize(Total_Fires = length(unique(address)),
             Total_311Vacant = sum(fireVacant2Q),
-            Total_Permit = sum(firePermit2Q))
+            Total_Permit = sum(firePermit2Q),
+            Total_Transfers = sum(fireTransfer2Q))
+            
 
 results_summary%>%
   kable()%>%
@@ -785,7 +853,7 @@ panelResults_Positive %>%
 
 ```
 
-```{r Vacancies vs Total}
+```{r}
 
 opa_dat_small_sf_join <- opa_dat_small_sf %>%
   dplyr::select(address)
@@ -845,7 +913,7 @@ panelResults_Positive %>%
 
 ```
 
-```{r}
+```{r Permits Plot}
 
 g(panelResults_Positive)
 
@@ -868,6 +936,58 @@ ggplot()+
   geom_sf(data=opaFirePermit_PlotData, aes(color=year), alpha=0.5)+
   scale_color_viridis_c()+
   labs(title = "Fires with L&I Permits within 6 Months") +
+  mapTheme()
+
+```
+
+
+```{r Transfers vs Total}
+
+g(panelResults_Positive)
+
+panelResults_Positive %>%
+  filter(count > 0 | fireTransfer2Q > 0)%>%
+  dplyr::select(quarter, count, severity_index, fireTransfer2Q)%>%
+  group_by(quarter)%>%
+  summarize(totalFires = sum(count),
+            transfers = sum(fireTransfer2Q))%>%
+  gather(Variable, value, -quarter)%>%
+  ggplot(aes(x=quarter, y=value, fill =Variable))+
+    geom_bar(stat="identity", position="dodge")+
+      labs(title="Fires with Real Estate Transfers Within 6 Months",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Date, Rounded to Beginning of Quarter")+
+  ylab("Number of Fires")+
+  scale_fill_manual(values=c("#20b1ae", "#e19825"))+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+  
+
+```
+
+```{r Tansfers Plot}
+
+g(panelResults_Positive)
+
+opaFireTransfer_PlotData <- opa_dat_small_sf_join %>%
+  left_join(filter(panelResults_Positive, fireTransfer2Q > 0), by="address")%>%
+  drop_na(fireTransfer2Q, geometry)%>%
+  st_as_sf%>%
+  st_set_crs("EPSG:4326")
+
+opaFireTransfer_PlotData <-
+  opaFireTransfer_PlotData[acsTractsPHL.2020,]%>%
+  mutate(year = year(quarter))
+
+g(opaFireTransfer_PlotData)
+
+table(opaFireTransfer_PlotData$year)
+
+ggplot()+
+  geom_sf(data=acsTractsPHL.2020, fill='#f0efe0', color='dark gray')+
+  geom_sf(data=opaFireTransfer_PlotData, aes(color=year), alpha=0.5)+
+  scale_color_viridis_c()+
+  labs(title = "Fires with Real Estate Transfers within 6 Months") +
   mapTheme()
 
 ```
