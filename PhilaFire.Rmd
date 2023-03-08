@@ -44,9 +44,13 @@ mapTheme <- theme(plot.title =element_text(size=12),
 ```
 
 ```{r Box Set Up}
-
-## INSERT BOX WORKFLOW HERE ##
-
+box_auth(client_id = "zhmuvtkofhuu21py025uhr8cffzew2om", 
+         client_secret = "k39pMJM1FUnBmGnRrM9zVUWk1eth0EVi")
+box_setwd(186732420366)
+box_getwd()
+box_ls()
+list <- box_ls() %>% as.data.frame()
+dat <- box_read_excel(1093000179542) 
 ```
 
 # Fire Panel - Initial, Count, and Final Panel
@@ -163,3 +167,39 @@ ogontz <-
 
 # Ogontz has 6 fires now instead of 9?
 ```
+
+# Package Set up
+```{r Package Installs}
+load.fun <- function(x) { 
+  x <- as.character(x) 
+  if(isTRUE(x %in% .packages(all.available=TRUE))) { 
+    eval(parse(text=paste("require(", x, ")", sep=""))) 
+    print(paste(c(x, " : already installed; requiring"), collapse=''))
+  } else { 
+    #update.packages()
+    print(paste(c(x, " : not installed; installing"), collapse=''))
+    eval(parse(text=paste("install.packages('", x, "')", sep=""))) 
+    print(paste(c(x, " : installed and requiring"), collapse=''))
+    eval(parse(text=paste("require(", x, ")", sep=""))) 
+  } 
+} 
+```
+
+```{r Required Packages}
+packages = c("bayesplot", "lme4","RcppEigen",
+             "tidyverse", "tidyr", "AmesHousing", "broom", "caret", "dials", "doParallel", "e1071", "earth",
+             "ggrepel", "glmnet", "ipred", "klaR", "kknn", "pROC", "rpart", "randomForest",
+             "sessioninfo", "tidymodels","ranger", "recipes", "workflows", "themis","xgboost",
+             "sf", "nngeo", "mapview")
+
+for(i in seq_along(packages)){
+  packge <- as.character(packages[i])
+  load.fun(packge)
+}
+
+session_info()
+```
+
+
+
+
