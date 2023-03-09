@@ -497,6 +497,7 @@ time.panel <- as_tibble(comb)%>%
 ```
 
 ```{r OPA Panel}
+
 opa.panel <- expand.grid(quarter = time.panel$yqDT, address = opa_dat_small$address)
 
 ```
@@ -518,19 +519,21 @@ ogontz <-
 
 ### 311 Vacancy and L&I Data
 
-```{r loading 311 data, echo=FALSE}
+```{r 311 and L&I Data Load-In, echo=FALSE}
 
 #311 Data Upload, downloaded from https://data.phila.gov/visualizations/311-requests/
 
 All311 <- read_csv("../Data/OpenDataPhilly-311Calls.csv")
 
+#L&I Complaint Data Upload, downloaded from https://data.phila.gov/visualizations/311-requests/
+
 AllLI <- st_read("../Data/complaints.geojson")
 
 ```
 
-Filtering 311 Data to the appropriate categories
+#### 311 Vacancy Calls
 
-``` {r 311 filter}
+``` {r 311 Clean and Count}
 
 #strictly filtering to vacancy complaints for initial combination
 property311 <- filter(All311, 
@@ -558,11 +561,9 @@ vacant311_count <- property311%>%
          address = address,
          quarter = quarter)
   
-vacant311_count$address <- as.factor(vacant311_count$address)  
-
 vacant311_count%>%
   group_by(quarter)%>%
-  summarize(count = sum(n_311Vacant))%>%
+  summarize(count = sum(n_Vacant))%>%
   ggplot(aes(x=quarter, y=count))+
   geom_col(fill="#A5300F")+
     labs(title="311 Vacancy Complaints",
@@ -575,7 +576,11 @@ vacant311_count%>%
 #Data is now ready to join with panel
 
 ```
+Data is limited to only 2014-2020.
 
+#### L&I Data
+
+Designations for L&I data switch during certain periods, but it does cover the span of all the fire data.
 
 ``` {r LI filter}
 
@@ -602,7 +607,7 @@ vacantLI_count$address <- as.factor(vacantLI_count$address)
 
 vacantLI_count%>%
   group_by(quarter)%>%
-  summarize(count = sum(n_LIVacant))%>%
+  summarize(count = sum(n_Vacant))%>%
   ggplot(aes(x=quarter, y=count))+
   geom_col(fill="#A5300F")+
     labs(title="L&I Vacancy Complaints",
@@ -616,10 +621,16 @@ vacantLI_count%>%
 
 ```
 
-```{r}
+We combine these for better coverage 2014-2020, but we take out the calls that happened during the same time on the same address.
 
-vacantLI311 <- rbind(vacantLI_count, vacant311_count)
-g(vacantLI311)
+```{r 311 LI r bind}
+
+#Outer join to ensure no date/quarter combos are the same, getting unique values
+vacant311_count_Clean <- vacant311_count%>%
+  anti_join(vacantLI_count, by=c("address", "quarter"))
+
+#Row bind L&I and Clean 311 together.
+vacantLI311 <- rbind(vacantLI_count, vacant311_count_Clean)
 
 vacantLI311%>%
   group_by(quarter)%>%
@@ -633,19 +644,20 @@ vacantLI311%>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
 
+vacant311_count$address <- as.factor(vacant311_count$address)  
+
 ```
+Data is now ready to join to the panel.
+
 ### L&I Permit Data
 
-Importing Permit Data
+Importing Permit Data by combining their two sets together.
 
-```{r Permit Data}
+```{r Permit Data Load-In}
 
 #Data from https://www.opendataphilly.org/dataset/licenses-and-inspections-building-permits
 
 #metadata at: https://metadata.phila.gov/#home/datasetdetails/5543868920583086178c4f8f/representationdetails/5e9a01ac801624001585ca11/
-
-g(permits0715)
-g(permits1623)
 
 permits0715 <- read_csv("../Data/OpenDataPhilly-permits_0715.csv")
 permits1623 <- read_csv("../Data/OpenDataPhilly-permits_1623.csv")
@@ -673,8 +685,6 @@ permits_sf_res <- permits_sf%>%
  #        permitdescription == "ALTERATION PERMIT")%>%
   mutate(quarter = as_date(floor_date(permitissuedate, unit="quarter")))
 
-table(permits1623$commercialorresidential)
-
 permits_count <- permits_sf_res %>%
   st_drop_geometry()%>%
   group_by(address, quarter)%>%
@@ -696,7 +706,7 @@ permits_count%>%
 
 ### Real Estate Transfer Data
 
-```{r Join }
+```{r Real Estate Transfers Load-In}
 
 transfers <- read_csv("../Data/OpenDataPhilly-transfers.csv")
 
@@ -710,7 +720,7 @@ transfers_data <- transfers%>%
 
 ```
 
-```{r}
+```{r Real Estate Transfers Count Panel}
 
 transfers_count <- transfers_data %>%
   group_by(address, quarter)%>%
@@ -726,8 +736,6 @@ transfers_count%>%
   ylab("Number of Records")+
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
-
-g(transfers_count)
 
 ```
 
@@ -751,11 +759,10 @@ panel_OPAFireOpenData$n_transfers[is.na(panel_OPAFireOpenData$n_transfers)] <- 0
 
 # Calculating Outcomes
 
-```{r Calculate Average Quarters Until Result}
+Objective is to know which fires had vacancy complaints, permit requests, or real estate transfers in the months or years following their fire. 
 
-#if fire or outcome, then keep address
-#if outcome, then outcome time minus fire time
-#Average outcome time
+This first chunk reduces the panel down to only the quarters where fires or outcomes occured within four years 
+```{r Calculate Average Quarters Until Result}
 
 #filter panel to just outcomes or fires
 panel_Positives <- panel_OPAFireOpenData %>%
@@ -764,37 +771,35 @@ panel_Positives <- panel_OPAFireOpenData %>%
 #filter to just fires, then combine those addresses with additional outcomes and building categories
 panel_FirePositives <- panel_OPAFireOpenData %>%
   filter(count > 0)%>%
-  select(address, severity_index)%>%
+  select(address)%>%
   distinct(address, .keep_all = TRUE)%>%
-  rename(fire_spread = severity_index)%>%
   left_join(panel_Positives, by="address")%>%
   left_join(dplyr::select(opa_dat_small_sf, address, category_code_description), by="address")%>%
   st_drop_geometry()
   #mutate(diff = interval(lag(quarter, n=1),quarter) %/% years(1))    
 
-#only start with fires
+#Eliminate the data that comes before the fires, as those are not outcomes of the fire
 panel_FirePositives <- panel_FirePositives%>%
   group_by(address)%>%
-  mutate(f = cumsum(count))%>%
-  filter(f > 0)%>%
+  mutate(f = cumsum(count))%>% #counts the cumulative sum of the number of fires at that address so far.
+  filter(f > 0)%>% #if that number is zero, then we don't want the data
   dplyr::select(-f)
 
 #Join to get fire incident number and date
 #calculate the difference between the quarter of the incident date and the quarter of the outcome
-
 panel_FirePositivesDiff <- panel_FirePositives%>%
   left_join(st_drop_geometry(dplyr::select(dat, incident_number,address, quarter)), by=c("address"))%>%
-  group_by(incident_number)%>%
+  group_by(incident_number)%>% #some addresses have multiple fires, so we use incident number instead
   mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
          ySinceFire = mSinceFire / 12,
-         code_descr = toupper(category_code_description))%>%
-  filter(mSinceFire >= -1, 
-         mSinceFire < 49)%>%
-  select(-category_code_description)%>%
+         cat_code = toupper(category_code_description))%>%
+  filter(mSinceFire >= -1,#Eliminate entries before fires (occurs because of incident_number group duplicates)
+         mSinceFire < 49, #Eliminate entries after four years, as they are irrelevant (arbitrary)
+         !(count > 0 & ySinceFire > 0))%>% #For addresses with multiple incidents, take out repeated fire observ's
+  dplyr::select(-category_code_description)%>%
   st_as_sf()
 
-panel_FirePositivesDiff$fire_spread <- as.factor(panel_FirePositivesDiff$fire_spread)
-
+#Chart:
 #For every outcome, what is the median time since a fire occurred?
 panel_FirePositivesDiff%>%
   st_drop_geometry()%>%
@@ -813,14 +818,15 @@ panel_FirePositivesDiff%>%
 
 ## Results (boolean)
 
-```{r Calculate Boolean of Outcome}
+The outcomes here can be used as the dependent variable for our model, when combined back with all the other properties. Our 2-years-after-fire results panel has 14,545 observations, down from the original data's ~21,000, so we lost about 40% of incidents. We'll have to check why. 
 
+```{r Calculate Boolean of Outcome}
 
 #six months boolean outcome code
 panel_Results2Q <- panel_OPAFireOpenData %>%
     mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
                                (count > 0 | lag(count, n=1) > 0) &
-                                (n_LIVacant > 0) > 0 , 1, 0),
+                                (n_Vacant > 0) > 0 , 1, 0),
            firePermit2Q = ifelse(address == lag(address, n=1) & 
                                (count > 0 | lag(count, n=1) > 0) &
                                 (n_permits > 0) > 0 , 1, 0),
@@ -828,41 +834,70 @@ panel_Results2Q <- panel_OPAFireOpenData %>%
                      (count > 0 | lag(count, n=1) > 0) &
                       (n_transfers > 0) > 0 , 1, 0))
 
+#2 Year Outcomes for Each Incident
+panel_Results2Y <- panel_FirePositivesDiff %>%
+    st_drop_geometry()%>%
+    dplyr::select(-mSinceFire, -cat_code, -quarter.y)%>%
+    filter(., ySinceFire <= 2)%>%
+    group_by(address, incident_number)%>%
+    summarize(count = sum(count),
+              severity_index = max(severity_index),
+              outcome_vacant = sum(n_Vacant),
+              outcome_permit = sum(n_permits),
+              outcome_transfer = sum(n_transfers),
+              quarter = min(quarter.x))
 
-#1 year code
-panel_Results1Y <- panel_OPAFireOpenData %>%
-    mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
-                               (count > 0 | lag(count, n=1) > 0) &
-                                (n_LIVacant > 0) > 0 , 1, 0),
-           firePermit2Q = ifelse(address == lag(address, n=1) & 
-                               (count > 0 | lag(count, n=1) > 0) &
-                                (n_permits > 0) > 0 , 1, 0),
-          fireTransfer2Q = ifelse(address == lag(address, n=1) & 
-                     (count > 0 | lag(count, n=1) > 0) &
-                      (n_transfers > 0) > 0 , 1, 0))
+```
 
-panelResults_Positive <- panel_Results%>%
+## Number of open data matches with fire data 
+
+The table below is the number of fires that had a particular outcome. These are not mutually exclusive, so some fires had two or all three outcomes.
+
+```{r Table of Positive Results}
+
+#For the 6 month outcome, get all positive entries. Not needed for 2Year code, all entries are already positive.
+panelResults_Positive <- panel_Results2Q%>%
   filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0 | fireTransfer2Q > 0)
 
-results_summary <- panel_Results%>%
-  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0 | fireTransfer2Q > 0)%>%
+#Checking how many positive outcomes we have for 2Q
+results_summary2Q <- panelResults_Positive%>%
   summarize(Total_Fires = length(unique(address)),
             Total_311Vacant = sum(fireVacant2Q),
             Total_Permit = sum(firePermit2Q),
             Total_Transfers = sum(fireTransfer2Q))
 
-results_summary%>%
+results_summary2Q%>%
   kable()%>%
+  kable_styling()
+
+#Checking how many positive outcomes we have for 2Y
+results_summary2Y <- panel_Results2Y%>%
+  ungroup%>%
+  summarize(Total_Fires = length(unique(address)),
+            Total_Vacant = sum(outcome_vacant>0),
+            Total_Permit = sum(outcome_permit>0),
+            Total_Transfers = sum(outcome_transfer>0))
+
+results_summary2Y%>%
+  kable(caption = "Total Outcomes Observed, Up to 2 Years After Fires")%>%
   kable_styling()
 
 ```
 
+#Plotting Measurements
+
 ## Measuring Time from Fire to Outcomes 
 
-```{r Time Since Fire}
+Here's our validation for picking 2 years as a cutoff. We originally picked 6 months as an arbitrary cutoff. Talking with a recovery expert and multiple Philedelphians who've recovered from fires themselves, we learned that recovery takes a much longer time. One person had to stay out of her apartment for 9 months until repairs were complete, and a house we could observe through Google Streetview was not repaired or sold until years after its vacancy complaint.
 
-#Distribution of Outcomes, Measuring Time between Fire abd Outcome
+The graphs below show the distribution of vacancy reports, permits, and property transfers (sales) when measuring their time from the fire.
+
+```{r Plotting Time Since Fire}
+
+#The Big Summary
+#Distribution of Outcomes, Measuring Time between Fire and Outcome
 panel_FirePositivesDiff%>%
+  st_drop_geometry%>%
   ungroup()%>%
   filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
   dplyr::select(n_Vacant, n_permits, n_transfers, ySinceFire)%>%
@@ -872,17 +907,25 @@ panel_FirePositivesDiff%>%
     geom_bar(position="dodge")+
       labs(title="Time Since Fire, by Outcome",
        subtitle="Philadelphia County, 2009-2022")+
-  xlab("Months Since Fire")+
+  xlab("Years Since Fire")+
   ylab("Count")+
   scale_fill_manual(values=palette3_sat)+
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
+```
+
+All seem to occur more frequently closer to the fire, with permits and vacancies most frequently occurring within a year after the fire and decreasing at a logarithmic rate. Transfers has a more linear relationship, starting high and gradually decreasing over time.
+
+### Additional Measurements, By Building Type or severity
+```{r Additional Plotting Time Since Fire}
+
 
 #Measuring Time between fire and Permit Requests, By Building Type
 panel_FirePositivesDiff%>%
   ungroup()%>%
+  st_drop_geometry()%>%
   filter(n_permits == 1)%>%
-  dplyr::select(code_descr, ySinceFire)%>%
+  dplyr::select(cat_code, ySinceFire)%>%
   gather(Variable, value, -ySinceFire)%>%
   filter(value > 0)%>%
   ggplot(aes(x=ySinceFire, fill=value))+
@@ -898,8 +941,9 @@ panel_FirePositivesDiff%>%
 #Measuring Time between fire and Vacancy Complaints, By Building Type
 panel_FirePositivesDiff%>%
   ungroup()%>%
+  st_drop_geometry()%>%
   filter(n_Vacant == 1)%>%
-  dplyr::select(code_descr, ySinceFire)%>%
+  dplyr::select(cat_code, ySinceFire)%>%
   gather(Variable, value, -ySinceFire)%>%
   filter(value > 0)%>%
   ggplot(aes(x=ySinceFire, fill=value))+
@@ -915,8 +959,9 @@ panel_FirePositivesDiff%>%
 #Measuring Time between fire and Real Estate Transfers, By Building Type
 panel_FirePositivesDiff%>%
   ungroup()%>%
+  st_drop_geometry()%>%
   filter(n_transfers == 1)%>% #change this line to switch variables
-  dplyr::select(code_descr, ySinceFire)%>%
+  dplyr::select(cat_code, ySinceFire)%>%
   gather(Variable, value, -ySinceFire)%>%
   filter(value > 0)%>%
   ggplot(aes(x=ySinceFire, fill=value))+
@@ -929,30 +974,14 @@ panel_FirePositivesDiff%>%
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
 
-#Measuring Time between fire and Real Estate Transfers, By Severity
-panel_FirePositivesDiff%>%
-  ungroup()%>%
-  filter(n_transfers == 1)%>% #change this line to switch variables
-  dplyr::select(fire_spread, ySinceFire)%>%
-  gather(Variable, value, -ySinceFire)%>%
-  ggplot(aes(x=ySinceFire, fill=value))+
-    geom_bar(position="dodge")+
-      labs(title="Time Between Real Estate Transfer and Fire, by Severity",
-       subtitle="Philadelphia County, 2009-2022")+
-  xlab("Years from Fire (Rounded to Quarter)")+
-  ylab("Count")+
-  scale_fill_manual(values=palette6_sat)+
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.background = element_rect(fill = "#f3efe0"))
-
 ```
 
-## Mapping Time Between Fire and Outcome
-```{r}
 
-ggplot()+
-  
-  geom_sf(data=panel_FirePositivesDiff, aes(color=ySinceFire))
+
+
+## Mapping Time Between Fire and Outcome
+
+```{r}
 
 panel_FirePositivesDiff%>%
   filter(n_transfers > 0)%>%
@@ -964,7 +993,6 @@ panel_FirePositivesDiff%>%
     mapTheme()
 
 ```
-
 
 ```{r Vacancies vs Total}
 
@@ -988,7 +1016,9 @@ panelResults_Positive %>%
 
 ```
 
-```{r}
+## Mapping outcome distribution across PHL
+
+```{r Maps }
 
 opa_dat_small_sf_join <- opa_dat_small_sf %>%
   dplyr::select(address)
@@ -1014,9 +1044,6 @@ ggplot()+
   labs(title = "Fires with Vacancy Complaints within 6 Months") +
   mapTheme()
 
-
-
-
 ggplot()+
   geom_sf(data=acsTractsPHL.2020, fill='#f0efe0', color='dark gray')+
   geom_sf(data=vacantLI, color="red", alpha=0.25, size=0.2)+
@@ -1024,7 +1051,6 @@ ggplot()+
   mapTheme()
 
 ```
-
 
 ```{r Permits vs Total}
 
@@ -1075,7 +1101,6 @@ ggplot()+
 
 ```
 
-
 ```{r Transfers vs Total}
 
 g(panelResults_Positive)
@@ -1093,7 +1118,7 @@ panelResults_Positive %>%
        subtitle="Philadelphia County, 2009-2022")+
   xlab("Date, Rounded to Beginning of Quarter")+
   ylab("Number of Fires")+
-  scale_fill_manual(values=c("#20b1ae", "#e19825"))+
+  scale_fill_manual(values=c("#e19825", "#20b1ae"))+
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
   
