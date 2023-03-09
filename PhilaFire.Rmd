@@ -52,6 +52,9 @@ palette4_desat <- c("#B19C7D","#B27D49","#7F5F52","#262626")
 palette5_sat <- c("#f1c82b","#e19825","#d55816","#7b230b","#413028")
 pallette5_desat <- c("#ead5b7","#d2b190","#b18e6f","#7f5f52","#413028")
 
+palette6_sat <- c("white","#f1c82b","#e19825","#d55816","#7b230b","#413028")
+
+
 palette7_cats <- c("#b9cfcf","#20b1ae","#e19825","#7b230b","#b47c49", "#3f3128", "#8f8172")
 
 #Sources for Graphs
@@ -761,8 +764,9 @@ panel_Positives <- panel_OPAFireOpenData %>%
 #filter to just fires, then combine those addresses with additional outcomes and building categories
 panel_FirePositives <- panel_OPAFireOpenData %>%
   filter(count > 0)%>%
-  select(address)%>%
+  select(address, severity_index)%>%
   distinct(address, .keep_all = TRUE)%>%
+  rename(fire_spread = severity_index)%>%
   left_join(panel_Positives, by="address")%>%
   left_join(dplyr::select(opa_dat_small_sf, address, category_code_description), by="address")%>%
   st_drop_geometry()
@@ -781,28 +785,39 @@ panel_FirePositives <- panel_FirePositives%>%
 panel_FirePositivesDiff <- panel_FirePositives%>%
   left_join(st_drop_geometry(dplyr::select(dat, incident_number,address, quarter)), by=c("address"))%>%
   group_by(incident_number)%>%
-  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1))%>%
-  filter(mSinceFire >= -1)
+  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
+         ySinceFire = mSinceFire / 12,
+         code_descr = toupper(category_code_description))%>%
+  filter(mSinceFire >= -1, 
+         mSinceFire < 49)%>%
+  select(-category_code_description)%>%
+  st_as_sf()
+
+panel_FirePositivesDiff$fire_spread <- as.factor(panel_FirePositivesDiff$fire_spread)
 
 #For every outcome, what is the median time since a fire occurred?
 panel_FirePositivesDiff%>%
+  st_drop_geometry()%>%
   ungroup()%>%
   filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
-  dplyr::select(n_Vacant, n_permits, n_transfers, mSinceFire)%>%
-  gather(Variable, value, -mSinceFire)%>%
+  mutate(ySinceFire = mSinceFire / 12)%>%
+  dplyr::select(n_Vacant, n_permits, n_transfers, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
   filter(value > 0)%>%
   group_by(Variable)%>%
-  summarize(`Median Months Since Fire` = median(mSinceFire))%>%
+  summarize(`Median Years Since Fire` = median(ySinceFire))%>%
   kable()%>%
   kable_styling()
 
-
 ```
 
+## Results (boolean)
 
-```{r Calculate 6 months after}
+```{r Calculate Boolean of Outcome}
 
-panel_Results <- panel_OPAFireOpenData %>%
+
+#six months boolean outcome code
+panel_Results2Q <- panel_OPAFireOpenData %>%
     mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
                                (count > 0 | lag(count, n=1) > 0) &
                                 (n_LIVacant > 0) > 0 , 1, 0),
@@ -814,6 +829,18 @@ panel_Results <- panel_OPAFireOpenData %>%
                       (n_transfers > 0) > 0 , 1, 0))
 
 
+#1 year code
+panel_Results1Y <- panel_OPAFireOpenData %>%
+    mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
+                               (count > 0 | lag(count, n=1) > 0) &
+                                (n_LIVacant > 0) > 0 , 1, 0),
+           firePermit2Q = ifelse(address == lag(address, n=1) & 
+                               (count > 0 | lag(count, n=1) > 0) &
+                                (n_permits > 0) > 0 , 1, 0),
+          fireTransfer2Q = ifelse(address == lag(address, n=1) & 
+                     (count > 0 | lag(count, n=1) > 0) &
+                      (n_transfers > 0) > 0 , 1, 0))
+
 panelResults_Positive <- panel_Results%>%
   filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0 | fireTransfer2Q > 0)
 
@@ -823,13 +850,121 @@ results_summary <- panel_Results%>%
             Total_311Vacant = sum(fireVacant2Q),
             Total_Permit = sum(firePermit2Q),
             Total_Transfers = sum(fireTransfer2Q))
-            
 
 results_summary%>%
   kable()%>%
   kable_styling()
 
 ```
+
+## Measuring Time from Fire to Outcomes 
+
+```{r Time Since Fire}
+
+#Distribution of Outcomes, Measuring Time between Fire abd Outcome
+panel_FirePositivesDiff%>%
+  ungroup()%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_Vacant, n_permits, n_transfers, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  filter(value > 0)%>%
+  ggplot(aes(x=ySinceFire, fill=Variable))+
+    geom_bar(position="dodge")+
+      labs(title="Time Since Fire, by Outcome",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Months Since Fire")+
+  ylab("Count")+
+  scale_fill_manual(values=palette3_sat)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+#Measuring Time between fire and Permit Requests, By Building Type
+panel_FirePositivesDiff%>%
+  ungroup()%>%
+  filter(n_permits == 1)%>%
+  dplyr::select(code_descr, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  filter(value > 0)%>%
+  ggplot(aes(x=ySinceFire, fill=value))+
+    geom_bar(position="dodge")+
+      labs(title="Time Between Permit Request and Fire, by Type",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Years from Fire (Rounded to Quarter)")+
+  ylab("Count")+
+  scale_fill_manual(values=palette7_cats)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+#Measuring Time between fire and Vacancy Complaints, By Building Type
+panel_FirePositivesDiff%>%
+  ungroup()%>%
+  filter(n_Vacant == 1)%>%
+  dplyr::select(code_descr, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  filter(value > 0)%>%
+  ggplot(aes(x=ySinceFire, fill=value))+
+    geom_bar(position="dodge")+
+      labs(title="Time Between Permit Request and Fire, by Type",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Years from Fire (Rounded to Quarter)")+
+  ylab("Count")+
+  scale_fill_manual(values=palette7_cats)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+#Measuring Time between fire and Real Estate Transfers, By Building Type
+panel_FirePositivesDiff%>%
+  ungroup()%>%
+  filter(n_transfers == 1)%>% #change this line to switch variables
+  dplyr::select(code_descr, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  filter(value > 0)%>%
+  ggplot(aes(x=ySinceFire, fill=value))+
+    geom_bar(position="dodge")+
+      labs(title="Time Between Permit Request and Fire, by Type",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Years from Fire (Rounded to Quarter)")+
+  ylab("Count")+
+  scale_fill_manual(values=palette7_cats)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+#Measuring Time between fire and Real Estate Transfers, By Severity
+panel_FirePositivesDiff%>%
+  ungroup()%>%
+  filter(n_transfers == 1)%>% #change this line to switch variables
+  dplyr::select(fire_spread, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  ggplot(aes(x=ySinceFire, fill=value))+
+    geom_bar(position="dodge")+
+      labs(title="Time Between Real Estate Transfer and Fire, by Severity",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Years from Fire (Rounded to Quarter)")+
+  ylab("Count")+
+  scale_fill_manual(values=palette6_sat)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))
+
+```
+
+## Mapping Time Between Fire and Outcome
+```{r}
+
+ggplot()+
+  
+  geom_sf(data=panel_FirePositivesDiff, aes(color=ySinceFire))
+
+panel_FirePositivesDiff%>%
+  filter(n_transfers > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=ySinceFire), size=0.9)+
+    scale_color_viridis_c()+
+    labs(title = "Fires with Property Transfers, by Years since Fire") +
+    mapTheme()
+
+```
+
 
 ```{r Vacancies vs Total}
 
