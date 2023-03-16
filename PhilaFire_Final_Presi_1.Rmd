@@ -138,16 +138,12 @@ dat <- dat[!duplicated(dat$incident_number),]
 
 With the help of the PFD, we were given access to proprietary data that consist of rich and extensive fire data collected by the department dating back to 2009. 
 
-To better understand the outcomes of fire impacted fires,we first conducted prelminatry literature review research on why fires occur in the first place.  The following model, originally  developed by Charles Jennings(1996),is a conceptualized model that represents the interrelationships between environmental, structural, and human factors as they relate to fire. We find this model useful as a way to devlop more powerful predictors of the incidence of fire and nuanced model to determine thier social and economic impacts in the future. 
-
-
-
+To better understand the outcomes of fire impacted fires,we first conducted prelminatry literature review research on why fires occur in the first place.  The following model, originally  developed by Charles Jennings(1996),is a conceptualized model that represents the interrelationships between environmental, structural, and human factors as they relate to fire. We find this model useful as a way to devlop more powerful predictors of the incidence of fire and nuanced model to determine their social and economic impacts in the future. 
 
 ![Jennings, 1996](/Users/kendrae.hills/Desktop/Spring 2023/MUSA_Practicum/Presentation images /Concept_diagram.png)
 
 ### How Many Fires Occur Per Address?
 ```{r Counting the Number of Fires Per Address, echo=FALSE, message=FALSE, warning=FALSE}
-
 #Count the number of Fires per address
 nFires_perAddress <- dat%>%
   st_drop_geometry()%>%
@@ -189,13 +185,12 @@ dat %>%
 
 ```
 There is little  unique patterns to the data, and it appears that fires have been relatively consistent over the last 15 years.
-- fires dip from July to September
+- Note: fires dip from July to September
 
 ### Property Use
 
 Focusing on residential cou
 ```{r Building Use, echo=FALSE}
-
 #Building Use for All Fires
 #Plotting the Frequency of Fires based on Property Use
 
@@ -221,7 +216,6 @@ dplyr::select(nFires_perAddress_BuildAll, -address)%>%
 ```
 
 If we cut out non-residential buildings, which have very different types of fires and post-fire outcomes than residential buildings (supercategory 4), we still keep the vast majority of the data.
-
 ```{r eval=FALSE, include=FALSE}
 
 #Count Fires by PropUse and Add Super Category column
@@ -251,11 +245,11 @@ nFires_perAddress_BuildAll%>%
 
 When measuring outcomes of buildings that experience a fire, the obvious question is how severe the fire was. There are multiple possible determinants in the data. We ended up using the first one, the ordinal variable labeled "fire spread". Here's how we made our decision:
 
-- disruption of fire spread within he fire spread severity. SO using fire spread is ideal 
+- Disruption of fire spread within he fire spread severity. SO using fire spread is ideal 
 
--Incident type: weighted to one cateogry, not as useful
+- Incident type: weighted to one cateogry, not as useful
 
--no record for a lot of fire incidents 
+- No record for a lot of fire incidents 
 
 #### Fire Spread
 
@@ -264,7 +258,6 @@ In our research, time had a big correlation with damage. The longer fire burns c
 Source: https://www.homego.com/blog/house-fire-damage/
 
 This was the simplest and most normally-distributed feature as compared to the three others we considered. 
-
 ```{r Bar Chart of Fire Spread, echo=FALSE}
 
 dat %>%
@@ -285,10 +278,10 @@ dat %>%
         panel.background = element_rect(fill = "#f3efe0"))
 
 ```
+
 #### Floor Damage Counts
 
 Originally these counts seemed useful as direct measures of damage, but the large amount of "no record" instances means that it can't function as a reliable metric. 
-
 ```{r Fire Damage Counts Setup, include=FALSE}
 g(dat)
 #How to measure severity in detail beyond 
@@ -318,14 +311,9 @@ ggplot(sFire_severity)+
 
 ```
 
-
-
 #### Cad Nature Code Description
 
 We have more specific categories, like CAD nature code description.
-
-
-
 ```{r undefined echo=FALSE}
 #Count the unique values for CAD
 nFires_CADDescr <- dat %>%
@@ -354,9 +342,7 @@ nFires_CADDescr%>%
 Incident type measures whether the interior or exterior of the structure has collapsed. Considering outcomes like demolition, vacancy, and major construction for homes affected by a fire, then collapse seems like a strong candidate for collelation. 
 
 However, the vast majority of cases are type 1110: no collapse. This doesn't make it a very helpful measure for severity, especially when we can see fire spread varying so heavily inside these categories. 
-
 ```{r Incident Type Bar Plot All Severities, echo=FALSE}
-
 dat %>%
   st_drop_geometry()%>%
   count(incident_type, fire_spread)%>%
@@ -375,9 +361,7 @@ dat %>%
 
 ```
 
-
 ```{r Incident Type Bar Plot Greater Severities, echo=FALSE}
-
 dat %>%
   st_drop_geometry()%>%
   count(incident_type, fire_spread)%>%
@@ -404,7 +388,6 @@ As a result, we picked fire spread as our measure of severity.
 We will classify an outlier as an observation more than 3 standard deviations away from the population mean.
 
 The mean number of fires per location is 1.115, weighted by the large amount of places where only 1 fire has occurred. The standard deviation of this fire population is 0.521. The result, 2.678, means any of the 293 locations with three or more fires will be classified as an outlier.
-
 ```{r ACS Data Loading, include=FALSE}
 
 acs_vars <- c("B01001_001E")
@@ -431,7 +414,6 @@ ggplot()+
 ```
 
 Apart from centers of population, there is not an obvious geographic distribution of the outliers. More research could be useful with ACS data to determine correlations. 
-
 ```{r echo=FALSE}
 #Plotting the Frequency of Fires based on the Outliers' property use
 
@@ -466,7 +448,6 @@ A key element to the exploratory analysis is understanding how fires relate to p
 The fire panel is created as the base template containing the key information related to fire incidents. The dataset first undergoes numerous operations to refine the information.
 
 The current structure of the initial dataset contains information regarding fire incidents from January 2009 - December 2022. Despite having the same address, there will be a new record of fire incident for that address as each fire has a unique incident number. In order to see the count and severity of properties with and without a fire incident we create a panel to display the observations of every possible address and time combination.
-
 ```{r Initial Panel, echo=TRUE}
 
 # Initial panel 
@@ -512,24 +493,24 @@ g(final.panel)
 
 # Reading the data
 # Kendra
-#AllOPA <- read_csv("/Users/kendrae.hills/Desktop/Spring 2023/MUSA_Practicum/opa_properties_public-2.csv")
+#opa_dat <- read_csv("/Users/kendrae.hills/Desktop/Spring 2023/MUSA_Practicum/opa_properties_public-2.csv")
 
 # Myron
-AllOPA <- read_csv("OpenDataPhilly-opa_properties_public.csv")
+opa_dat <- read_csv("OpenDataPhilly-opa_properties_public.csv")
 
 # Creating geometry for the properties
-OPA_sf <- AllOPA%>%
+opa_dat <- opa_dat%>%
   drop_na(lng, lat)%>%
   st_as_sf(coords = c("lng", "lat"),
            crs = "EPSG:4326")
 
-g(OPA_sf)
+g(opa_dat)
 ```
 
 # OPA Panel
 ```{r OPA Setup, echo=TRUE}
 # Reducing columns
-opa_dat_small_sf <- OPA_sf[!duplicated(OPA_sf$location),] %>%
+opa_dat_small_sf <- opa_dat[!duplicated(opa_dat$location),] %>%
   dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)%>%
   rename(address = location)
 
@@ -578,7 +559,6 @@ ogontz <-
 # Adding Open Data
 
 ### 311 Call Data
-
 ```{r loading 311 data, include=FALSE}
 
 #311 Data Upload, downloaded from https://data.phila.gov/visualizations/311-requests/
@@ -590,7 +570,7 @@ AllLI <- st_read("complaints.geojson")
 
 ```
 
-Filtering 311 Data to the appropriate categories
+Filtering 311 Data to the appropriate categories. Data is limited to only 2014-2020.
 ```{r undefined , include=FALSE}
 #Filtering to only the fire/building-relevant terms
 
@@ -637,7 +617,7 @@ vacant311_count%>%
 ```
 
 ### L&I Data
-
+Designations for L&I data switch during certain periods, but it does cover the span of all the fire data.
 ```{r LI filter}
 #strictly filtering to vacancy complaints for initial combination
 vacantLI <- filter(AllLI, 
@@ -672,6 +652,7 @@ vacantLI_count%>%
 #Data is now ready to join with panel
 ```
 
+We combine these for better coverage 2014-2020, but we take out the calls that happened during the same time on the same address.
 ```{r}
 #Outer join to ensure no date/quarter combos are the same, getting unique values
 vacant311_count_Clean <- vacant311_count%>%
@@ -693,7 +674,7 @@ vacant311_count$address <- as.factor(vacant311_count$address)
 ```
 
 ### L&I Permit Data
-
+Importing Permit Data by combining their two sets together.
 ```{r Permit Data, echo=TRUE}
 #Importing Permit Data
 #Data from https://www.opendataphilly.org/dataset/licenses-and-inspections-building-permits
@@ -713,7 +694,6 @@ permits_sf <- permitsAll%>%
 ``` 
 
 ### Cleaning Permit Data and Creating Count Table
-
 ```{r Permit Data Clean and Count, echo=TRUE}
 
 permits_sf_res <- permits_sf%>%
@@ -746,7 +726,6 @@ permits_count%>%
 ```
 
 ### Real Estate Transfer Data
-
 ```{r Real Estate Transfers Load-In}
 transfers <- read_csv("OpenDataPhilly-transfers.csv")
 #Select relevant fields and filter to fire data range
@@ -776,7 +755,6 @@ transfers_count%>%
 ```
 
 ### Joining Open Data to Existing Panel
-
 ```{r Join 311 and Permits to panel_FireOPA,include=FALSE}
 
 panel_OPAFire311 <- left_join(opa_count.panel, vacant311_count, by=c("address", "quarter"))
@@ -794,6 +772,7 @@ panel_OPAFireOpenData$n_transfers[is.na(panel_OPAFireOpenData$n_transfers)] <- 0
 ```
 
 # Calculating Outcomes
+Objective is to know which fires had vacancy complaints, permit requests, or real estate transfers in the months or years following their fire. 
 ```{r Calculate Average Quarters Until Result}
 #filter panel to just outcomes or fires
 panel_Positives <- panel_OPAFireOpenData %>%
@@ -848,6 +827,7 @@ panel_FirePositivesDiff%>%
 ```
 
 ## Results (Boolean)
+The outcomes here can be used as the dependent variable for our model, when combined back with all the other properties. Our 2-years-after-fire results panel has 14,545 observations, down from the original data's ~21,000, so we lost about 40% of incidents. We'll have to check why. 
 ```{r Calculate Boolean Outcome Code}
 #six months boolean outcome code
 panel_Results2Q <- panel_OPAFireOpenData %>%
@@ -877,7 +857,7 @@ panel_Results2Y <- panel_FirePositivesDiff %>%
 ```
 
 ## Number of open data matches with fire data 
-
+The table below is the number of fires that had a particular outcome. These are not mutually exclusive, so some fires had two or all three outcomes.
 ```{r Table of Positive Results}
 #For the 6 month outcome, get all positive entries. Not needed for 2Year code, all entries are already positive.
 panelResults_Positive <- panel_Results2Q%>%
@@ -902,9 +882,11 @@ results_summary2Y%>%
   kable(caption = "Total Outcomes Observed, Up to 2 Years After Fires")%>%
   kable_styling()
 ```
+
 #### STOPPED HERE. Rest of the code is visualizations from Bens code.
 
 ### The three chunks below might not be needed. Do not run for now
+The table below is the number of fires that had a particular outcome. These are not mutually exclusive, so some fires had two or all three outcomes.
 ```{r Calculate 6 months after, echo=TRUE}
 panel_Results <- panel_OPAFire311Permit %>%
     mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
@@ -965,7 +947,6 @@ panelResults_Positive %>%
   
 
 ```
-
 
 # Preparing for Modeling
 ```{r Model Set-Up}
