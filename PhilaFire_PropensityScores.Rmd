@@ -1,0 +1,244 @@
+---
+title: "PhilaFire_PropensityScore"
+author: "Ben Keel"
+date: "2023-03-20"
+output: html_document
+---
+
+# Set Up
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(boxr)
+library(mapview)
+library(sf)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(tigris)
+library(viridis)
+library(dplyr)
+library(tidycensus)
+library(ggplot2)
+library(RSocrata)
+library(lubridate)
+library(janitor)
+library(MatchIt)
+
+options(scipen = 999)
+mapTheme <- theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background=element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm"))
+
+#Color Palettes
+palette3_sat <- c("#e19825","#d55816","#7b230b")
+palette3_desat <- c("#B19C7D","#7F5F52","#262626")
+
+palette4 <- c("#f1c82b","#e19825","#d55816","#7b230b")
+palette4_desat <- c("#B19C7D","#B27D49","#7F5F52","#262626")
+
+palette5_sat <- c("#f1c82b","#e19825","#d55816","#7b230b","#413028")
+pallette5_desat <- c("#ead5b7","#d2b190","#b18e6f","#7f5f52","#413028")
+
+palette6_sat <- c("white","#f1c82b","#e19825","#d55816","#7b230b","#413028")
+
+
+palette7_cats <- c("#b9cfcf","#20b1ae","#e19825","#7b230b","#b47c49", "#3f3128", "#8f8172")
+
+#Sources for Graphs
+creditFire <- "Source: Philadelphia Fire Department"
+creditOpen <- "Source: Open Data Philly"
+
+g<-glimpse
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+crs <- "EPSG:4326"
+PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West Coast
+
+```
+
+#Process
+
+1. Load in results, as we captured in EDA.
+
+2. Add open data covariates (OPA, ACS, Transfer Values) to those results.
+
+3. Check mean (0 to 1) or of results for each test group. 
+
+# Tying the Sample Code to Our Own Data
+
+<https://sejdemyr.github.io/r-tutorials/statistics/tutorial8.html>
+
+## In the sample data:
+
+Outcome variable of interest: standardized math score
+
+Independent variable of interest: Catholic School y/n
+
+Covariates:
+
+-   race_white: Is the student white (1) or not (0)?
+
+-   p5hmage: Mother's age
+
+-   w3income: Family income
+
+-   p5numpla: Number of places the student has lived for at least 4 months
+
+-   w3momed_hsb: Is the mother's education level high-school or below (1) or some college or more (0)?
+
+## In our data:
+
+Outcome variable of interest: Vacancy / Permits / Transfers
+
+Independent variable of interest: Fire y/n
+
+Covariates:
+
+-   OPA Data
+
+    -   building_code (categorical)
+    
+    -   total_livable_area (continuous)
+
+    -   number_of_bedrooms (continuous)
+    
+    -   number_of_bathrooms (continuous)
+    
+    -   year_built (continuous)
+    
+    -   quality_grade (ordinal)
+
+-   ACS Data
+
+    -   Tract Average Income (continuous)
+    
+    -   Tract average White racial makeup % (continuous)
+    
+-   Transfers Data
+    
+    -   Sales price of 5 nearest buildings (continous)
+
+```{r}
+
+
+
+```
+
+# Fire Data
+
+## Loading In
+
+```{r Box Set Up, message=FALSE, warning=FALSE}
+
+## INSERT BOX WORKFLOW HERE ##
+
+```
+
+```{r Cleaning The Dataset}
+# Creating geometry for the fires
+dat <- structureFire
+
+dat <- dat %>% drop_na("Longitude", "Latitude") %>%
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = "EPSG:4326")
+
+# Cleaning the column names
+dat <- clean_names(dat)
+
+# Address string
+dat <-
+  dat %>% mutate(street_type = ifelse(street_type == 'AV', "AVE", street_type)) %>% 
+  unite(address, c('address_number', 'street_prefix', 'street_name', 'street_type'), sep = " ", remove = FALSE, na.rm=TRUE)
+
+# Extracting quarter
+dat <- dat %>% mutate(quarter = floor_date(alarm_date, unit="quarter"))
+
+# Reducing columns
+dat <- dat %>%
+  dplyr::select(address, quarter, property_use, incident_number, number_of_exposures, incident_type, building_status, fire_spread, no_spread, code_description, geometry, alarm_date, cad_nature_code_description,
+                minor_damage, significant_damage, heavy_damage, extreme_damage)
+
+# Removing duplicates
+dat <- dat[!duplicated(dat$incident_number),]
+
+```
+
+ACS geometry of Philadelphia
+
+```{r ACS Data Loading, warning=FALSE, message=FALSE}
+
+census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
+
+acs_vars <- c("B01001_001E")
+
+acsTractsPHL.2020 <- get_acs(geography = "tract",
+                             year = 2020, 
+                             variables = acs_vars, 
+                             geometry = TRUE, 
+                             state = "PA", 
+                             county = "Philadelphia", 
+                             output = "wide")%>%
+  st_set_crs("EPSG:4326")
+
+```
+
+# OPA Data
+
+```{r OPA Data Import}
+# Reading the data
+opa_dat <- read_csv("../Data/OpenDataPhilly-opa_properties_public.csv")
+
+# Creating geometry for the properties
+opa_dat <- opa_dat%>%
+  drop_na(lat, lng)%>%
+  st_as_sf(coords = c("lat", "lng"),
+           crs = "EPSG:4326")
+```
+
+```{r OPA Data Set Up}
+
+# Reducing columns
+opa_dat_small_sf <- opa_dat[!duplicated(opa_dat$location),] %>%
+  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, mailing_street, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)%>%
+  rename(address = location)
+
+# #Check for condos to correct "SINGLE FAMILY" designation. Need to talk this through: what's a useful separation? 2 story condos and 10 story condos are very different.
+# opa_condo <- opa_dat_small_sf %>%
+#   filter(grepl("CONDO", building_code_description))%>%
+#   filter(grepl("5", building_code))%>%
+#   distinct(address, .keep_all = TRUE)%>%
+#   mutate(condo = "MULTI FAMILY")%>%
+#   dplyr::select(address, building_code, building_code_description, condo)
+# 
+# table(opa_condo$building_code)
+  
+# Filtering for residential properties
+opa_dat_small_sf <- opa_dat_small_sf %>% 
+  filter(category_code == 1 | category_code == 2 | category_code == 3)#%>%
+  # left_join(opa_condo, by="address")%>%
+  # mutate(cat_code_descr_new = ifelse(is.na(condo), category_code_description, condo))
+  # 
+  # 
+  # mutate(cat_code_adjusted = ifelse())
+
+# Extracting just the addresses
+opa_dat_small <- opa_dat_small_sf%>%
+  dplyr::select(address)%>%
+  st_drop_geometry()
+```
