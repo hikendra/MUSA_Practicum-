@@ -45,6 +45,7 @@ library(lubridate)
 library(janitor)
 
 
+
 options(scipen = 999)
 mapTheme <- theme(plot.title =element_text(size=12),
                   plot.subtitle = element_text(size=8),
@@ -88,8 +89,8 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 ```{r Box Set Up, include=FALSE}
 #Loading in Fire Data 
 ## INSERT BOX WORKFLOW HERE ##
-box_auth(client_id = "5uqluwfy2fsqfwts7hfofn1yuq5q3snf", 
-         client_secret = "y11sGdz8felfrTpT7cSWzhS0QXOZOkKi")
+#box_auth(client_id = "5uqluwfy2fsqfwts7hfofn1yuq5q3snf", 
+#         client_secret = "y11sGdz8felfrTpT7cSWzhS0QXOZOkKi")
 
 # Myron
 box_auth(client_id = "zhmuvtkofhuu21py025uhr8cffzew2om", 
@@ -134,7 +135,7 @@ dat <- dat[!duplicated(dat$incident_number),]
 
 ## **Exploratory Analysis** 
 
-## The Data: Understanding Fire Incidents 
+### The Data: Understanding Fire Incidents 
 
 With the help of the PFD, we were given access to proprietary data that consist of rich and extensive fire data collected by the department dating back to 2009. 
 
@@ -171,7 +172,6 @@ There have been at least one incident of a fire for over 15,000 structures in Ph
 
 ### Counts Over Time
 ```{r Fire Counts Over Time, echo=FALSE}
-
 #Line plot of Fires per quarter, Min to Max
 dat %>%
   ggplot(aes(x=as_date(quarter))) +
@@ -485,6 +485,7 @@ final.panel <-
 g(final.panel)
 ```
 
+### OPA Panel
 ```{r OPA Upload and building counts, echo=TRUE}
 
 #Data from https://www.opendataphilly.org/dataset/opa-property-assessments
@@ -496,7 +497,7 @@ g(final.panel)
 #opa_dat <- read_csv("/Users/kendrae.hills/Desktop/Spring 2023/MUSA_Practicum/opa_properties_public-2.csv")
 
 # Myron
-opa_dat <- read_csv("OpenDataPhilly-opa_properties_public.csv")
+opa_dat <- read_csv("Data/OpenDataPhilly-opa_properties_public.csv")
 
 # Creating geometry for the properties
 opa_dat <- opa_dat%>%
@@ -507,7 +508,6 @@ opa_dat <- opa_dat%>%
 g(opa_dat)
 ```
 
-# OPA Panel
 ```{r OPA Setup, echo=TRUE}
 # Reducing columns
 opa_dat_small_sf <- opa_dat[!duplicated(opa_dat$location),] %>%
@@ -547,13 +547,7 @@ opa.panel <- expand.grid(address = opa_dat_small$address,
 ```{r OPA + Fire Panel, echo=TRUE}
 # Combining OPA and Fire
 opa_count.panel <- full_join(opa.panel, final.panel, by=c("address", "quarter")) # Join
-opa_count.panel[is.na(opa_count.panel)] <- 0 # Assigning 0 to NA for everything - DO WE WANT THIS?
-
-# Subset of data to observe for validity and minimize processing time
-ogontz <- 
-  filter(opa_count.panel, address == "5600 OGONTZ AVE")
-
-# Ogontz has 6 fires now instead of 9?
+opa_count.panel[is.na(opa_count.panel)] <- 0 # Assigning 0 to NA for everything 
 ```
 
 # Adding Open Data
@@ -563,9 +557,9 @@ ogontz <-
 
 #311 Data Upload, downloaded from https://data.phila.gov/visualizations/311-requests/
 
-All311 <- read_csv("OpenDataPhilly-311Calls.csv")
+All311 <- read_csv("Data/OpenDataPhilly-311Calls.csv")
 
-AllLI <- st_read("complaints.geojson")
+AllLI <- st_read("Data/complaints.geojson")
 
 
 ```
@@ -628,6 +622,7 @@ vacantLI <- filter(AllLI,
   dplyr::select(address, addressobjectid, complaintdate, complaintcodename, geometry)%>%
   mutate(quarter = as_date(floor_date(complaintdate, unit="quarter")))%>%
   st_set_crs("EPSG:4326")
+
 vacantLI_count <- vacantLI%>%
   st_drop_geometry%>%
   drop_na(address)%>%
@@ -638,6 +633,7 @@ vacantLI_count <- vacantLI%>%
          quarter = quarter)
   
 vacantLI_count$address <- as.factor(vacantLI_count$address)  
+
 vacantLI_count%>%
   group_by(quarter)%>%
   summarize(count = sum(n_Vacant))%>%
@@ -657,6 +653,7 @@ We combine these for better coverage 2014-2020, but we take out the calls that h
 #Outer join to ensure no date/quarter combos are the same, getting unique values
 vacant311_count_Clean <- vacant311_count%>%
   anti_join(vacantLI_count, by=c("address", "quarter"))
+
 #Row bind L&I and Clean 311 together.
 vacantLI311 <- rbind(vacantLI_count, vacant311_count_Clean)
 vacantLI311%>%
@@ -670,10 +667,11 @@ vacantLI311%>%
   ylab("Number of Fires")+
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
     panel.background = element_rect(fill = "#f3efe0"))
+
 vacant311_count$address <- as.factor(vacant311_count$address) 
 ```
 
-### L&I Permit Data
+### Permit Data
 Importing Permit Data by combining their two sets together.
 ```{r Permit Data, echo=TRUE}
 #Importing Permit Data
@@ -681,8 +679,8 @@ Importing Permit Data by combining their two sets together.
 
 #metadata at: https://metadata.phila.gov/#home/datasetdetails/5543868920583086178c4f8f/representationdetails/5e9a01ac801624001585ca11/
 
-permits0715 <- read_csv("OpenDataPhilly-permits_0715.csv")
-permits1623 <- read_csv("OpenDataPhilly-permits_1623.csv")
+permits0715 <- read_csv("Data/OpenDataPhilly-permits_0715.csv")
+permits1623 <- read_csv("Data/OpenDataPhilly-permits_1623.csv")
 
 permitsAll <- rbind(permits0715, permits1623)
 
@@ -693,7 +691,7 @@ permits_sf <- permitsAll%>%
 
 ``` 
 
-### Cleaning Permit Data and Creating Count Table
+Cleaning Permit Data and Creating Count Table
 ```{r Permit Data Clean and Count, echo=TRUE}
 
 permits_sf_res <- permits_sf%>%
@@ -726,23 +724,32 @@ permits_count%>%
 ```
 
 ### Real Estate Transfer Data
+```{r SHORTCUT: Real Estate Transfers Count Panel}
+transfers_count <- read_csv("Data/transfers_count.csv")
+```
+
 ```{r Real Estate Transfers Load-In}
-transfers <- read_csv("OpenDataPhilly-transfers.csv")
+#transfers <- read_csv("Data/OpenDataPhilly-transfers.csv")
+
 #Select relevant fields and filter to fire data range
-transfers_data <- transfers%>%
-  dplyr:: select(objectid, recording_date, street_address, document_type)%>%
-  filter(year(recording_date) > 2008,
-         !is.na(street_address))%>%
-  rename(address = street_address)%>%
-  mutate(quarter = as_date(floor_date(recording_date, unit="quarter")))
+#transfers_data <- transfers%>%
+#  dplyr:: select(objectid, recording_date, street_address, document_type)%>%
+#  filter(year(recording_date) > 2008,
+#         !is.na(street_address))%>%
+#  rename(address = street_address)%>%
+#  mutate(quarter = as_date(floor_date(recording_date, unit="quarter")))
 ```
 
 ```{r Real Estate Transfers Count Panel}
-transfers_count <- transfers_data %>%
-  group_by(address, quarter)%>%
-  count(address, sort = TRUE)%>%
-  rename(n_transfers = n)
+#transfers_count <- transfers_data %>%
+#  group_by(address, quarter)%>%
+#  count(address, sort = TRUE)%>%
+#  rename(n_transfers = n)
 
+#write.csv(transfers_count, "~/Desktop/Coding/MUSA Practicum/MUSA_Practicum-/Data/transfers_count.csv")
+```
+
+```{r Real Estate Transfers ggplot}
 transfers_count%>%
   ggplot(aes(x=quarter, y=n_transfers))+
   geom_col(fill="#A5300F")+
@@ -755,20 +762,19 @@ transfers_count%>%
 ```
 
 ### Joining Open Data to Existing Panel
+```{r SHORTCUT: Join 311 and Permits to panel_FireOPA}
+panel_OPAFireOpenData <- read_csv("Data/panel_OPAFireOpenData.csv")
+```
+
 ```{r Join 311 and Permits to panel_FireOPA,include=FALSE}
+#panel_OPAFire311 <- left_join(opa_count.panel, vacant311_count, by=c("address", "quarter"))
+#panel_OPAFire311$n_311Vacant[is.na(panel_OPAFire311$n_311Vacant)] <- 0
 
-panel_OPAFire311 <- left_join(opa_count.panel, vacant311_count, by=c("address", "quarter"))
+#panel_OPAFire311Permit <- left_join(panel_OPAFire311, permits_count, by=c("address", "quarter"))
+#panel_OPAFire311Permit$n_permits[is.na(panel_OPAFire311Permit$n_permits)] <- 0
 
-panel_OPAFire311$n_311Vacant[is.na(panel_OPAFire311$n_311Vacant)] <- 0
-
-panel_OPAFire311Permit <- left_join(panel_OPAFire311, permits_count, by=c("address", "quarter"))
-
-panel_OPAFire311Permit$n_permits[is.na(panel_OPAFire311Permit$n_permits)] <- 0
-
-panel_OPAFireOpenData <- left_join(panel_OPAFire311Permit, transfers_count, by=c("quarter", "address"))
-
-panel_OPAFireOpenData$n_transfers[is.na(panel_OPAFireOpenData$n_transfers)] <- 0
-
+#panel_OPAFireOpenData <- left_join(panel_OPAFire311Permit, transfers_count, by=c("quarter", "address"))
+#panel_OPAFireOpenData$n_transfers[is.na(panel_OPAFireOpenData$n_transfers)] <- 0
 ```
 
 # Calculating Outcomes
@@ -776,12 +782,12 @@ Objective is to know which fires had vacancy complaints, permit requests, or rea
 ```{r Calculate Average Quarters Until Result}
 #filter panel to just outcomes or fires
 panel_Positives <- panel_OPAFireOpenData %>%
-  filter(count > 0 | n_311Vacant > 0 | n_permits > 0 | n_transfers > 0)
+  filter(count > 0 | n_Vacant > 0 | n_permits > 0 | n_transfers > 0)
 
 #filter to just fires, then combine those addresses with additional outcomes and building categories
 panel_FirePositives <- panel_OPAFireOpenData %>%
-  filter(count > 0)%>%
-  select(address)%>%
+  filter(count > 0) %>%
+  dplyr::select(address) %>%
   distinct(address, .keep_all = TRUE)%>%
   left_join(panel_Positives, by="address") %>%
   left_join(dplyr::select(opa_dat_small_sf, address, category_code_description), by="address")%>%
@@ -815,9 +821,9 @@ panel_FirePositivesDiff <- panel_FirePositives%>%
 panel_FirePositivesDiff%>%
   st_drop_geometry()%>%
   ungroup()%>%
-  filter(!(n_311Vacant == 0 & n_permits == 0 & n_transfers == 0)) %>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0)) %>%
   mutate(ySinceFire = mSinceFire / 12)%>%
-  dplyr::select(n_311Vacant, n_permits, n_transfers, ySinceFire)%>%
+  dplyr::select(n_Vacant, n_permits, n_transfers, ySinceFire)%>%
   gather(Variable, value, -ySinceFire)%>%
   filter(value > 0)%>%
   group_by(Variable)%>%
@@ -828,6 +834,10 @@ panel_FirePositivesDiff%>%
 
 ## Results (Boolean)
 The outcomes here can be used as the dependent variable for our model, when combined back with all the other properties. Our 2-years-after-fire results panel has 14,545 observations, down from the original data's ~21,000, so we lost about 40% of incidents. We'll have to check why. 
+```{r SHORTCUT: Calculate Boolean Outcome Code}
+panel_Results2Y <- read_csv("Data/panel_Results2Y.csv")
+```
+
 ```{r Calculate Boolean Outcome Code}
 #six months boolean outcome code
 panel_Results2Q <- panel_OPAFireOpenData %>%
@@ -842,48 +852,127 @@ panel_Results2Q <- panel_OPAFireOpenData %>%
                       (n_transfers > 0) > 0 , 1, 0))
 
 #2 Year Outcomes for Each Incident
-panel_Results2Y <- panel_FirePositivesDiff %>%
-    st_drop_geometry()%>%
-    dplyr::select(-mSinceFire, -cat_code, -quarter.y)%>%
-    filter(., ySinceFire <= 2)%>% # edit here if we wanna play with the lags
-    group_by(address, incident_number)%>%
-    summarize(count = sum(count),
-              severity_index = max(severity_index),
-              outcome_vacant = sum(n_311Vacant),
-              outcome_permit = sum(n_permits),
-              outcome_transfer = sum(n_transfers),
-              quarter = min(quarter.x))
-# Join back to original dataset to get the spatial features
+#panel_Results2Y <- panel_FirePositivesDiff %>%
+#    st_drop_geometry()%>%
+#    dplyr::select(-mSinceFire, -cat_code, -quarter.y)%>%
+#    filter(., ySinceFire <= 2)%>% # edit here if we wanna play with the lags
+#    group_by(address, incident_number)%>%
+#    summarize(count = sum(count),
+#              severity_index = max(severity_index),
+#              outcome_vacant = sum(n_311Vacant),
+#              outcome_permit = sum(n_permits),
+#              outcome_transfer = sum(n_transfers),
+#              quarter = min(quarter.x))
+
+# Later: Join back to original dataset to get the spatial features
 ```
 
-## Number of open data matches with fire data 
-The table below is the number of fires that had a particular outcome. These are not mutually exclusive, so some fires had two or all three outcomes.
-```{r Table of Positive Results}
-#For the 6 month outcome, get all positive entries. Not needed for 2Year code, all entries are already positive.
-panelResults_Positive <- panel_Results2Q%>%
-  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0 | fireTransfer2Q > 0)
-#Checking how many positive outcomes we have for 2Q
-results_summary2Q <- panelResults_Positive%>%
-  summarize(Total_Fires = length(unique(address)),
-            Total_311Vacant = sum(fireVacant2Q),
-            Total_Permit = sum(firePermit2Q),
-            Total_Transfers = sum(fireTransfer2Q))
-results_summary2Q%>%
-  kable()%>%
-  kable_styling()
-#Checking how many positive outcomes we have for 2Y
-results_summary2Y <- panel_Results2Y%>%
-  ungroup%>%
-  summarize(Total_Fires = length(unique(address)),
-            Total_Vacant = sum(outcome_vacant>0),
-            Total_Permit = sum(outcome_permit>0),
-            Total_Transfers = sum(outcome_transfer>0))
-results_summary2Y%>%
-  kable(caption = "Total Outcomes Observed, Up to 2 Years After Fires")%>%
-  kable_styling()
+# Feature Engineering 
+```{r}
+# Adding geometry from the original dataframe into our result panel
+#dat_clean <- dat %>% dplyr::select(address, geometry)
+#panel_Results2Y_sf <- left_join(panel_Results2Y, dat_clean, by="address")  
+#panel_Results2Y_sf <- panel_Results2Y_sf[!duplicated(panel_Results2Y_sf$incident_number),]
+#panel_Results2Y_sf <- st_as_sf(panel_Results2Y_sf) %>% st_transform(st_crs('ESRI:102729'))
+
+# OPA - Creating an OPA dataset to get just the variables we want for feature engineering
+opa_dat_small_sf_fe <- opa_dat_small_sf %>% dplyr::select(address, total_livable_area, market_value,number_of_bedrooms, number_of_bathrooms)
+opa_dat_small_sf_fe[is.na(opa_dat_small_sf_fe)] <- 0 # Assigning 0 to NA for everything
+
+# Fire Data - Creating an OPA dataset to get just the variables we want for feature engineering
+dat_fe <- dat %>% dplyr::select(address, incident_type, number_of_exposures,fire_spread, no_spread, minor_damage, significant_damage, heavy_damage, extreme_damage)
+
+dat_fe$fire_spread[is.na(dat_fe$fire_spread)] <- 0
+dat_fe$fire_spread <- as.numeric(dat_fe$fire_spread)
+
+dat_fe <-dat_fe %>%
+  mutate(no_spread = case_when(
+    no_spread == "T" ~ 0,
+    TRUE ~ 1
+  ))
 ```
 
-#### STOPPED HERE. Rest of the code is visualizations from Bens code.
+```{r}
+# Joining panel_Results2Y with OPA FE variables
+panel_Results2Y_sf_TEST <- left_join(panel_Results2Y, opa_dat_small_sf_fe, by="address") # Join
+panel_Results2Y_sf_TEST[is.na(panel_Results2Y_sf_TEST)] <- 0 # Assigning 0 to NA for everything
+
+# Joining panel_Results2Y with Fire FE variables
+panel_Results2Y_sf_TEST <- left_join(panel_Results2Y_sf_TEST, dat_fe, by = "address") # Join
+panel_Results2Y_sf_TEST <- panel_Results2Y_sf_TEST %>% dplyr::select(-geometry.y) # Dropping new geometry
+panel_Results2Y_sf_TEST <- panel_Results2Y_sf_TEST %>% rename(geometry = geometry.x) # Renaming geometry
+
+# Joining panel_Results2Y with Time outcome FE variables
+panel_FirePositivesDiff_fe <- panel_FirePositivesDiff %>% 
+  dplyr::select(address, mSinceFire, ySinceFire, cat_code) %>% st_drop_geometry() # Condensing dataframe
+fire_panel <- merge(panel_Results2Y_sf_TEST,panel_FirePositivesDiff_fe ) # Join
+fire_panel <- final_panel[!duplicated(final_panel$incident_number),] # Removing Duplicates
+```
+
+```{r}
+# Feature Engineering
+# Turning outcomes into binary
+fire_panel <-fire_panel %>%
+  mutate(vacant = case_when(
+    outcome_vacant > 0 ~ 1,
+    TRUE ~ 0
+  ))
+
+fire_panel <-fire_panel %>%
+  mutate(permit = case_when(
+    outcome_permit > 0 ~ 1,
+    TRUE ~ 0
+  ))
+
+fire_panel <-fire_panel %>%
+  mutate(transfer = case_when(
+    outcome_transfer > 0 ~ 1,
+    TRUE ~ 0
+  ))
+
+# Market Value
+fire_panel <-
+  fire_panel %>%
+  mutate(value = case_when(
+    market_value < 25000 ~ "Low", # < $250,000
+    market_value > 24999 & market_value < 500000 ~ "Medium", # $250,000-$500,000
+    TRUE ~ "High")) # $500,000+
+
+# Number of Bedrooms
+fire_panel <-
+  fire_panel %>%
+  mutate(bedrooms = case_when(
+    number_of_bedrooms < 4 ~ "Low", # 1-3 Bedrooms
+    number_of_bedrooms > 3 & number_of_bedrooms < 8 ~ "Medium", # 4-7 Bedrooms
+    TRUE ~ "High")) # 8+
+
+# Number of Bathrooms
+fire_panel <-
+  fire_panel %>%
+  mutate(bathrooms = case_when(
+    number_of_bathrooms < 3 ~ "Low", # 1-2 Bathroom
+    number_of_bathrooms > 2 & number_of_bathrooms < 6 ~ "Medium", # 3-5 Bathrooms
+    TRUE ~ "High")) # $6+
+
+# Livable Area - Maybe fix later
+fire_panel <-
+  fire_panel %>%
+  mutate(area = case_when(
+    total_livable_area < 5001 ~ "Low", # < 0-5,000 sqft
+    total_livable_area > 4999 & total_livable_area < 10000 ~ "Medium", # 5,001-10,000 sqft
+    TRUE ~ "High")) # 10,001+ sqft
+
+fire_panel$toPredict <- 0 # Creating a toPredict column
+fire_panel_nogeo <- fire_panel %>% dplyr::select(-geometry)
+
+```
+
+Is this needed?
+```{r}
+fire_panel_vacant <- fire_panel_nogeo %>% filter(vacant == 1) %>% dplyr::select(-outcome_permit, -outcome_transfer, -permit, -transfer)
+
+fire_panel_permit <- fire_panel_nogeo %>% filter(permit == 1) %>% dplyr::select(-outcome_vacant, -outcome_transfer, -vacant, -transfer)
+```
 
 ### The three chunks below might not be needed. Do not run for now
 The table below is the number of fires that had a particular outcome. These are not mutually exclusive, so some fires had two or all three outcomes.
@@ -948,11 +1037,13 @@ panelResults_Positive %>%
 
 ```
 
-# Preparing for Modeling
-```{r Model Set-Up}
-# Gradient Boosting - Boosted Regression
-# Random Forest
 
+
+
+
+
+# Modeling Strategy
+```{r Model Set-Up}
 load.fun <- function(x) { 
   x <- as.character(x) 
   if(isTRUE(x %in% .packages(all.available=TRUE))) { 
@@ -967,8 +1058,7 @@ load.fun <- function(x) {
   } 
 } 
 
-packages = c("bayesplot", "lme4","RcppEigen",
-             "tidyverse", "tidyr", "AmesHousing", "broom", "caret", "dials", "doParallel", "e1071", "earth",
+packages = c("bayesplot", "lme4","RcppEigen", "tidyr", "broom", "caret", "dials", "doParallel", "e1071", "earth",
              "ggrepel", "glmnet", "ipred", "klaR", "kknn", "pROC", "rpart", "randomForest",
              "sessioninfo", "tidymodels","ranger", "recipes", "workflows", "themis","xgboost",
              "sf", "nngeo", "mapview")
@@ -979,13 +1069,247 @@ for(i in seq_along(packages)){
 }
 
 session_info()
-
 ```
 
+Change here
 ```{r Initial Split for Training and Test}
-data_split <- initial_split(panel_Results2Y, prop = 0.75) #strata = "Sale_Price" --- what does this necessarily mean?
-fire_train <- training(data_split)
-fire_test  <- testing(data_split)
+# Vacant
+split_vacant <- initial_split(fire_panel_vacant, strata = "vacant", prop = 0.75)
+train_vacant <- training(split_vacant)
+test_vacant <- testing(split_vacant)
+
+# Permit
+split_permit <- initial_split(fire_panel_permit, strata = "permit", prop = 0.75)
+train_permit <- training(split_permit)
+test_permit <- testing(split_permit)
+
+# Transfer
+split_transfer <- initial_split(panel_Results2Y_sf_TEST_nogeo, strata = "transfer", prop = 0.75)
+train_transfer <- training(split_transfer)
+test_transfer <- testing(split_transfer)
+```
+
+```{r Feature Creation}
+# Feature Creation, Need to research, might be feture engineering???
+
+# Vacant
+model_rec_vacant <- recipe(outcome_vacant ~ ., data = train_vacant) %>%
+  update_role(address, new_role = "Address") %>%
+  step_other(address, threshold = 0.005) %>%
+  step_dummy(all_nominal(), -address) %>%
+  step_log(outcome_vacant, skip = TRUE) %>%
+  step_zv(all_predictors()) %>%
+  step_center(all_predictors(), -outcome_vacant) %>%
+  step_scale(all_predictors(), -outcome_vacant)
+  #step_ns(Latitude, Longitude, options = list(df = 4))
+
+# Permit
+model_rec_permit <- recipe(outcome_permit ~ ., data = train_permit) %>%
+  update_role(address, new_role = "Address") %>%
+  step_other(address, threshold = 0.005) %>%
+  step_dummy(all_nominal(), -address) %>%
+  step_log(outcome_permit, skip = TRUE) %>%
+  step_zv(all_predictors()) %>%
+  step_center(all_predictors(), -outcome_permit) %>%
+  step_scale(all_predictors(), -outcome_permit) %>%
+  #step_ns(Latitude, Longitude, options = list(df = 4))
+
+# Transfer
+model_rec_transfer <- recipe(outcome_transfer ~ ., data = train_transfer) %>%
+  update_role(address, new_role = "Address") %>%
+  step_other(address, threshold = 0.005) %>%
+  step_dummy(all_nominal(), -address) %>%
+  step_log(outcome_transfer, skip = TRUE) %>%
+  step_zv(all_predictors()) %>%
+  step_center(all_predictors(), -outcome_transfer) %>%
+  step_scale(all_predictors(), -outcome_transfer) %>%
+  #step_ns(Latitude, Longitude, options = list(df = 4))
+
+# See the data after all transformations
+glimpse(model_rec %>% prep() %>% juice())
+```
+
+```{r Model Specifications}
+#GLM
+glmnet_plan <- 
+  linear_reg() %>% 
+  set_args(penalty  = tune()) %>%
+  set_args(mixture  = tune()) %>%
+  set_engine("glmnet")
+
+#Gradient Boost
+XGB_plan <- boost_tree() %>%
+  set_args(mtry  = tune()) %>%
+  set_args(min_n = tune()) %>%
+  set_args(trees = 100) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("regression")
+```
+
+```{r GLM Hyperparameter}
+# Hyperparameter grid for glmnet (penalization)
+glmnet_grid <- expand.grid(penalty = seq(0, 1, by = .25), 
+                           mixture = seq(0,1,0.25))
+
+xgb_grid <- expand.grid(mtry = c(3,5), 
+                        min_n = c(1,5))
+```
+
+```{r Creating Workflows}
+# GLM
+# Vacant
+glmnet_wf_vacant <-
+  workflow() %>% 
+  add_recipe(model_rec_vacant) %>% 
+  add_model(glmnet_plan)
+
+# Permit
+glmnet_wf_permit <-
+  workflow() %>% 
+  add_recipe(model_rec_permit) %>% 
+  add_model(glmnet_plan)
+
+# Transfer
+glmnet_wf_transfer <-
+  workflow() %>% 
+  add_recipe(model_rec_transfer) %>% 
+  add_model(glmnet_plan)
+
+# XGB
+# Vacant
+xgb_wf_vacant <-
+  workflow() %>% 
+  add_recipe(model_rec_vacant) %>% 
+  add_model(XGB_plan)
+
+# Permit
+xgb_wf_permit <-
+  workflow() %>% 
+  add_recipe(model_rec_permit) %>% 
+  add_model(XGB_plan)
+
+# Transfer
+xgb_wf_transfer <-
+  workflow() %>% 
+  add_recipe(model_rec_transfer) %>% 
+  add_model(XGB_plan)
+```
+
+```{r Fit Model To Workflow and Calculate Metrics}
+control <- control_resamples(save_pred = TRUE, verbose = TRUE)
+metrics <- metric_set(rmse, rsq, mape, smape)
+
+# GLM
+# Vacant
+glmnet_tuned_vacant <- glmnet_wf_vacant %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = glmnet_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+# Permit
+glmnet_tuned_permit <- glmnet_wf_permit %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = glmnet_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+# Transfer
+glmnet_tuned_transfer <- glmnet_tuned_transfer %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = glmnet_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+# XGB
+# Vacant
+xgb_tuned_vacant <- xgb_wf_vacant %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = xgb_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+# Permit
+xgb_tuned_permit <- xgb_wf_permit %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = xgb_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+# Transfer
+xgb_tuned_transfer <- xgb_wf_transfer %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = xgb_grid,
+                  control   = control,
+                  metrics   = metrics)
+```
+
+```{r Metrics Across Grid}
+# GLM
+autoplot(glmnet_tuned_vacant) # Vacant
+autoplot(glmnet_tuned_permit) # Permit
+autoplot(glmnet_tuned_transfer) # Transfer
+
+collect_metrics(glmnet_tuned_vacant) # Vacant
+collect_metrics(glmnet_tuned_permit) # Permit
+collect_metrics(glmnet_tuned_transfer) # Transfer
+
+show_best(glmnet_tuned_vacant, metric = "rsq", n = 15) # Vacant - 'Best' by some metric and margin 
+show_best(glmnet_tuned_permit, metric = "rsq", n = 15) # Permit - 'Best' by some metric and margin 
+show_best(glmnet_tuned_transfer, metric = "rsq", n = 15) # Transfer - 'Best' by some metric and margin 
+
+glmnet_best_params_vacant <- select_best(glmnet_tuned_vacant, metric = "rmse")
+glmnet_best_params_permit <- select_best(glmnet_tuned_permit, metric = "rmse")
+glmnet_best_params_transfer <- select_best(glmnet_tuned_transfer, metric = "rmse")
+
+# XGB
+autoplot(xgb_tuned_vacant) # Vacant
+autoplot(xgb_tuned_permit) # Permit
+autoplot(xgb_tuned_transfer) # Transfer
+
+collect_metrics(xgb_tuned_vacant) # Vacant
+collect_metrics(xgb_tuned_permit) # Permit
+collect_metrics(xgb_tuned_transfer) # Transfer
+
+show_best(xgb_tuned_vacant, metric = "rsq", n = 15) # Vacant - 'Best' by some metric and margin 
+show_best(xgb_tuned_permit, metric = "rsq", n = 15) # Permit - 'Best' by some metric and margin 
+show_best(xgb_tuned_transfer, metric = "rsq", n = 15) # Transfer - 'Best' by some metric and margin 
+
+xgb_best_params_vacant <- select_best(xgb_tuned_vacant, metric = "rmse"   )
+xgb_best_params_permit <- select_best(xgb_tuned_permit, metric = "rmse"   )
+xgb_best_params_transfer <- select_best(xgb_tuned_transfer, metric = "rmse"   )
+```
+
+```{r Final Workflow}
+# GLM
+glmnet_best_wf_vacant <- finalize_workflow(glmnet_wf_vacant, glmnet_best_params_vacant) # Vacant
+glmnet_best_wf_permit <- finalize_workflow(glmnet_wf_permit, glmnet_best_params_permit) # Permit
+glmnet_best_wf_transfer <- finalize_workflow(glmnet_wf_transfer, glmnet_best_params_transfer) # Transfer
+
+# XGB
+xgb_best_wf_vacant <- finalize_workflow(xgb_wf_vacant, xgb_best_params_vacant) # Vacant
+xgb_best_wf_permit <- finalize_workflow(xgb_wf_permit, xgb_best_params_permit) # Permit
+xgb_best_wf_transfer <- finalize_workflow(xgb_wf_transfer, xgb_best_params_transfer) # Transfer
+```
+
+```{r}
+# last_fit() emulates the process where, after determining the best model, the final fit on the entire training set is needed and is then evaluated on the test set.
+
+glmnet_val_fit_geo <- glmnet_best_wf %>% 
+  last_fit(split     = data_split,
+           control   = control,
+           metrics   = metrics)
+
+xgb_val_fit_geo <- xgb_best_wf %>% 
+  last_fit(split     = data_split,
+           control   = control,
+           metrics   = metrics)
 ```
 
 ```{r}
@@ -1022,5 +1346,127 @@ fire_test  <- testing(data_split)
 
 ```
 
+# GLM Models - what would our dependent variable be 
+```{r Vacant }
+# Do not add livable area, market value, or incident type
+model_vacant <- glm(as.factor(mSinceFire) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + value + bedrooms + bathrooms + area + cat_code, 
+              family="binomial"(link="logit"), data = train_vacant)
+summary(model_vacant) 
 
+classProbs <- predict(model_vacant, train_vacant, type="response")
+hist(classProbs)
+
+testProbs <- data.frame(Outcome = as.factor(test_vacant$vacant),
+                        Probs = predict(model_vacant, test_vacant, type= "response"))
+head(testProbs)
+testProbs <-
+  testProbs %>%
+  na.omit()
+
+palette2 <- c("#981FAC","#FF006A")
+ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
+  geom_density() +
+  facet_grid(Outcome ~ .) +
+  scale_fill_manual(values = palette2) +
+  labs(x = "Credit", y = "Density of probabilities",
+       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
+  theme(strip.text.x = element_text(size = 18),
+        legend.position = "none")
+
+ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
+  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
+  style_roc(theme = theme_grey) +
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
+  labs(title = "Figure 5: ROC Curve - Tax Credit")
+
+testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
+caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
+                       data = as.factor(testProbs$Probs), 
+                       positive = "1") 
+```
+
+```{r Permit}
+# Do not add livable area, market value, or incident type
+model_permit <- glm(as.factor(mSinceFire) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + value + bedrooms + bathrooms + area + cat_code, 
+              family="binomial"(link="logit"), data = train_permit)
+summary(model_permit)
+
+classProbs <- predict(model_permit, train_permit, type="response")
+hist(classProbs)
+
+testProbs <- data.frame(Outcome = as.factor(test_permit$permit),
+                        Probs = predict(model_permit, test_permit, type= "response"))
+head(testProbs)
+testProbs <-
+  testProbs %>%
+  na.omit()
+
+palette2 <- c("#981FAC","#FF006A")
+ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
+  geom_density() +
+  facet_grid(Outcome ~ .) +
+  scale_fill_manual(values = palette2) +
+  labs(x = "Credit", y = "Density of probabilities",
+       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
+  theme(strip.text.x = element_text(size = 18),
+        legend.position = "none")
+
+ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
+  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
+  style_roc(theme = theme_grey) +
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
+  labs(title = "Figure 5: ROC Curve - Tax Credit")
+
+testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
+caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
+                       data = as.factor(testProbs$Probs), 
+                       positive = "1") 
+
+
+
+testing <-
+  test_permit %>%
+  mutate(Price.Predict = predict(model_permit, test_permit),
+         Price.Error = Price.Predict - mSinceFire,
+         Price.AbsError = abs(Price.Predict - mSinceFire),
+         Price.APE = (abs(Price.Predict - mSinceFire)) / Price.Predict)
+```
+
+```{r Transfer}
+# Do not add livable area, market value, or incident type
+model_transfer <- glm(as.factor(transfer) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + vacant + permit + value + bedrooms + bathrooms + area, 
+              family="binomial"(link="logit"), data = train_transfer)
+summary(model_transfer)
+
+classProbs <- predict(model_transfer, train_transfer, type="response")
+hist(classProbs)
+
+testProbs <- data.frame(Outcome = as.factor(test_transfer$transfer),
+                        Probs = predict(model_transfer, test_transfer, type= "response"))
+head(testProbs)
+testProbs <-
+  testProbs %>%
+  na.omit()
+
+palette2 <- c("#981FAC","#FF006A")
+ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
+  geom_density() +
+  facet_grid(Outcome ~ .) +
+  scale_fill_manual(values = palette2) +
+  labs(x = "Credit", y = "Density of probabilities",
+       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
+  theme(strip.text.x = element_text(size = 18),
+        legend.position = "none")
+
+ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
+  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
+  style_roc(theme = theme_grey) +
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
+  labs(title = "Figure 5: ROC Curve - Tax Credit")
+
+testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
+caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
+                       data = as.factor(testProbs$Probs), 
+                       positive = "1") 
+```
 
