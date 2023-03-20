@@ -82,7 +82,7 @@ PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West 
 
 ## INSERT BOX WORKFLOW HERE ##
 
-#Box Upload Philadelphia Structure Fire
+
 
 ```
 
@@ -458,7 +458,7 @@ g(final.panel)
 ```
 
 # OPA Panel
-```{r OPA Setup}
+```{r OPA Data Import}
 # Reading the data
 opa_dat <- read_csv("../Data/OpenDataPhilly-opa_properties_public.csv")
 
@@ -467,14 +467,33 @@ opa_dat <- opa_dat%>%
   drop_na(lat, lng)%>%
   st_as_sf(coords = c("lat", "lng"),
            crs = "EPSG:4326")
+```
+
+```{r OPA Data Set Up}
 
 # Reducing columns
 opa_dat_small_sf <- opa_dat[!duplicated(opa_dat$location),] %>%
-  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)%>%
+  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, mailing_street, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)%>%
   rename(address = location)
 
+# #Check for condos to correct "SINGLE FAMILY" designation. Need to talk this through: what's a useful separation? 2 story condos and 10 story condos are very different.
+# opa_condo <- opa_dat_small_sf %>%
+#   filter(grepl("CONDO", building_code_description))%>%
+#   filter(grepl("5", building_code))%>%
+#   distinct(address, .keep_all = TRUE)%>%
+#   mutate(condo = "MULTI FAMILY")%>%
+#   dplyr::select(address, building_code, building_code_description, condo)
+# 
+# table(opa_condo$building_code)
+  
 # Filtering for residential properties
-opa_dat_small_sf <- opa_dat_small_sf %>% filter(category_code == 1 | category_code == 2 | category_code == 3)
+opa_dat_small_sf <- opa_dat_small_sf %>% 
+  filter(category_code == 1 | category_code == 2 | category_code == 3)#%>%
+  # left_join(opa_condo, by="address")%>%
+  # mutate(cat_code_descr_new = ifelse(is.na(condo), category_code_description, condo))
+  # 
+  # 
+  # mutate(cat_code_adjusted = ifelse())
 
 # Extracting just the addresses
 opa_dat_small <- opa_dat_small_sf%>%
@@ -774,12 +793,16 @@ panel_FirePositives <- panel_OPAFireOpenData %>%
   select(address)%>%
   distinct(address, .keep_all = TRUE)%>%
   left_join(panel_Positives, by="address")%>%
-  left_join(dplyr::select(opa_dat_small_sf, address, category_code_description), by="address")%>%
+  left_join(dplyr::select(opa_dat_small_sf, address, category_code_description, mailing_street, building_code_description), by="address")%>%
+  mutate(condo = ifelse(grepl("CONDO", building_code_description) == TRUE, TRUE, FALSE),
+          owner_occ = ifelse(condo == FALSE & category_code_description != "MULTI FAMILY",
+                             ifelse(address == mailing_street, TRUE, FALSE),
+                             NA))%>%
+  dplyr::select(-mailing_street, -condo, -building_code_description)%>%
   st_drop_geometry()
-  #mutate(diff = interval(lag(quarter, n=1),quarter) %/% years(1))    
 
 #Eliminate the data that comes before the fires, as those are not outcomes of the fire
-panel_FirePositives <- panel_FirePositives%>%
+panel_FirePositivesForward <- panel_FirePositives%>%
   group_by(address)%>%
   mutate(f = cumsum(count))%>% #counts the cumulative sum of the number of fires at that address so far.
   filter(f > 0)%>% #if that number is zero, then we don't want the data
@@ -787,7 +810,7 @@ panel_FirePositives <- panel_FirePositives%>%
 
 #Join to get fire incident number and date
 #calculate the difference between the quarter of the incident date and the quarter of the outcome
-panel_FirePositivesDiff <- panel_FirePositives%>%
+panel_FirePositivesDiff <- panel_FirePositivesForward%>%
   left_join(st_drop_geometry(dplyr::select(dat, incident_number,address, quarter)), by=c("address"))%>%
   group_by(incident_number)%>% #some addresses have multiple fires, so we use incident number instead
   mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
@@ -846,6 +869,16 @@ panel_Results2Y <- panel_FirePositivesDiff %>%
               outcome_permit = sum(n_permits),
               outcome_transfer = sum(n_transfers),
               quarter = min(quarter.x))
+
+```
+
+### Writing results to HD (only use if need to re-write export)
+
+```{r Writing CSVs for modeling}
+
+#write.csv(panel_Results2Y, "Results2Y.csv", row.names=FALSE)
+#write.csv(panel_OPAFireOpenData, "panel_OPA_Fire_OpenData.csv", row.names=FALSE)
+
 
 ```
 
@@ -915,6 +948,137 @@ panel_FirePositivesDiff%>%
 ```
 
 All seem to occur more frequently closer to the fire, with permits and vacancies most frequently occurring within a year after the fire and decreasing at a logarithmic rate. Transfers has a more linear relationship, starting high and gradually decreasing over time.
+
+### Plotting proximity of outcomes to the date of the fires
+
+Looking four years into the future and past, did fires affect the occurence of the three outcomes in these properties? Was there a spike in reports close to after the fire? Is the pattern strong enough to see? 
+
+```{r Visualization of outcome proximity to fire date}
+
+#filter to just fires, then combine those addresses with additional outcomes and building categories
+panel_FirePositives1120 <- panel_OPAFireOpenData %>%
+  filter(count > 0,
+         year(quarter) < 2019,
+         year(quarter) > 2011)%>% #filter out fires that occurred before 2011 after 2019, as to not weight too heavily toward ends of the data. Creates four year tails of outcomes without bias.
+  select(address)%>%
+  distinct(address, .keep_all = TRUE)%>%
+  left_join(panel_Positives, by="address")%>%
+  left_join(dplyr::select(opa_dat_small_sf, address, category_code_description, mailing_street, building_code_description), by="address")%>%
+  mutate(condo = ifelse(grepl("CONDO", building_code_description) == TRUE, TRUE, FALSE),
+          owner_occ = ifelse(condo == FALSE & category_code_description != "MULTI FAMILY",
+                             ifelse(address == mailing_street, "OWNER", "RENTER"),
+                             NA))%>%
+  dplyr::select(-mailing_street, -condo, -building_code_description)%>%
+  st_drop_geometry()
+  #mutate(diff = interval(lag(quarter, n=1),quarter) %/% years(1))    
+
+#Join to get fire incident number and date
+#calculate the difference between the quarter of the incident date and the quarter of the outcome
+panel_FirePositivesDiff_All <- panel_FirePositives1120%>%
+  anti_join(nFires_perAddress_Outliers, by="address")%>% #take out outliers of 3+ fires
+  left_join(st_drop_geometry(dplyr::select(dat, incident_number,address, quarter)), by=c("address"))%>%
+  group_by(incident_number)%>% #some addresses have multiple fires, so we use incident number instead
+  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
+         ySinceFire = mSinceFire / 12,
+         cat_code = toupper(category_code_description))%>%
+  filter(mSinceFire <= 48 &  mSinceFire >= -48)%>% #limiting outcomes to four years for relevancy
+  dplyr::select(-category_code_description)%>%
+  st_as_sf()
+
+panel_FirePositivesDiff_All%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_Vacant, n_permits, n_transfers, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  filter(value > 0)%>%
+  ggplot(aes(x=ySinceFire, fill=Variable))+
+    geom_bar(position="dodge", just = 1)+
+      labs(title="Number of Vacancies, Permits, and Transfers by Time Since Fire",
+       subtitle="Philadelphia County, Fires Occuring Between 2012-2018 (Buildings with 1-2 Fires)")+
+  xlab("Years Since Fire (By Quarter)")+
+  ylab("Quantity of Outcomes")+
+  scale_fill_manual(values=palette3_sat)+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  geom_vline(xintercept = 0, color = "#7b230b", size = 1, linetype = "dashed")
+
+```
+
+### Categorical Differences
+#### Owner Occupied?
+
+```{r Permits Owner Occ}
+
+#Measuring Time between fire and Permit Requests, By Ownership
+panel_FirePositivesDiff_All%>%
+  ungroup()%>%
+  st_drop_geometry()%>%
+  filter(n_permits > 0)%>%
+  dplyr::select(owner_occ, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  ggplot(aes(x=ySinceFire, fill=value))+
+    geom_bar(position="dodge", just = 1)+
+      labs(title= "How Soon Does a Permit Request Happen After A Fire, by Owner/Renter",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Years from Fire (Rounded to Quarter)")+
+  ylab("Number of Permit Requests")+
+  scale_fill_manual(values=palette7_cats)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))+
+   scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  geom_vline(xintercept = 0, color = "#7b230b", size = 1, linetype = "dashed")
+
+```
+
+```{r Vacancy Owner Occ}
+
+#Measuring Time between fire and Permit Requests, By Ownership
+panel_FirePositivesDiff_All%>%
+  ungroup()%>%
+  st_drop_geometry()%>%
+  filter(n_Vacant > 0)%>%
+  dplyr::select(owner_occ, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  ggplot(aes(x=ySinceFire, fill=value))+
+    geom_bar(position="dodge", just = 1)+
+      labs(title="Proximity of Vacancy Complaints to Fires, by Owner/Renter",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Years from Fire (Rounded to Quarter)")+
+  ylab("Frequency")+
+  scale_fill_manual(values=palette7_cats)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))+
+   scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  geom_vline(xintercept = 0, color = "#7b230b", size = 1, linetype = "dashed")
+
+```
+
+```{r Transfers Owner Occ}
+
+#Measuring Time between fire and Permit Requests, By Ownership
+panel_FirePositivesDiff_All%>%
+  ungroup()%>%
+  st_drop_geometry()%>%
+  filter(n_transfers > 0)%>%
+  dplyr::select(owner_occ, ySinceFire)%>%
+  gather(Variable, value, -ySinceFire)%>%
+  ggplot(aes(x=ySinceFire, fill=value))+
+    geom_bar(position="dodge", just = 1)+
+      labs(title="Time Proximity of Sales to Fires, by Owner/Renter",
+       subtitle="Philadelphia County, 2009-2022")+
+  xlab("Years from Fire (Rounded to Quarter)")+
+  ylab("Frequency")+
+  scale_fill_manual(values=palette7_cats)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.background = element_rect(fill = "#f3efe0"))+
+   scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  geom_vline(xintercept = 0, color = "#7b230b", size = 1, linetype = "dashed")
+
+```
 
 ### Additional Measurements, By Building Type or severity
 ```{r Additional Plotting Time Since Fire}
