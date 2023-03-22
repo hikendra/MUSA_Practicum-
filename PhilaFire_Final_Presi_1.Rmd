@@ -43,8 +43,8 @@ library(ggplot2)
 library(RSocrata)
 library(lubridate)
 library(janitor)
-
-
+library(proxy)
+library(FNN)
 
 options(scipen = 999)
 mapTheme <- theme(plot.title =element_text(size=12),
@@ -449,7 +449,6 @@ The fire panel is created as the base template containing the key information re
 
 The current structure of the initial dataset contains information regarding fire incidents from January 2009 - December 2022. Despite having the same address, there will be a new record of fire incident for that address as each fire has a unique incident number. In order to see the count and severity of properties with and without a fire incident we create a panel to display the observations of every possible address and time combination.
 ```{r Initial Panel, echo=TRUE}
-
 # Initial panel 
 dat.panel <-
   expand.grid(quarter = unique(dat$quarter), 
@@ -497,7 +496,7 @@ g(final.panel)
 #opa_dat <- read_csv("/Users/kendrae.hills/Desktop/Spring 2023/MUSA_Practicum/opa_properties_public-2.csv")
 
 # Myron
-opa_dat <- read_csv("Data/OpenDataPhilly-opa_properties_public.csv")
+opa_dat <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/OpenDataPhilly-opa_properties_public.csv")
 
 # Creating geometry for the properties
 opa_dat <- opa_dat%>%
@@ -511,7 +510,7 @@ g(opa_dat)
 ```{r OPA Setup, echo=TRUE}
 # Reducing columns
 opa_dat_small_sf <- opa_dat[!duplicated(opa_dat$location),] %>%
-  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade)%>%
+  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade, central_air, exterior_condition, fireplaces, fuel, taxable_building, topography, type_heater, sale_price, separate_utilities)%>%
   rename(address = location)
 
 # Filtering for residential properties
@@ -557,9 +556,9 @@ opa_count.panel[is.na(opa_count.panel)] <- 0 # Assigning 0 to NA for everything
 
 #311 Data Upload, downloaded from https://data.phila.gov/visualizations/311-requests/
 
-All311 <- read_csv("Data/OpenDataPhilly-311Calls.csv")
+All311 <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/OpenDataPhilly-311Calls.csv")
 
-AllLI <- st_read("Data/complaints.geojson")
+AllLI <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/complaints.geojson")
 
 
 ```
@@ -679,8 +678,8 @@ Importing Permit Data by combining their two sets together.
 
 #metadata at: https://metadata.phila.gov/#home/datasetdetails/5543868920583086178c4f8f/representationdetails/5e9a01ac801624001585ca11/
 
-permits0715 <- read_csv("Data/OpenDataPhilly-permits_0715.csv")
-permits1623 <- read_csv("Data/OpenDataPhilly-permits_1623.csv")
+permits0715 <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/OpenDataPhilly-permits_0715.csv")
+permits1623 <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/OpenDataPhilly-permits_1623.csv")
 
 permitsAll <- rbind(permits0715, permits1623)
 
@@ -693,7 +692,6 @@ permits_sf <- permitsAll%>%
 
 Cleaning Permit Data and Creating Count Table
 ```{r Permit Data Clean and Count, echo=TRUE}
-
 permits_sf_res <- permits_sf%>%
   dplyr::select(permittype, permitdescription, permitissuedate, commercialorresidential, address)%>%
 #  filter(permitdescription == "DEMOLITION PERMIT" |
@@ -725,7 +723,7 @@ permits_count%>%
 
 ### Real Estate Transfer Data
 ```{r SHORTCUT: Real Estate Transfers Count Panel}
-transfers_count <- read_csv("Data/transfers_count.csv")
+transfers_count <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/transfers_count.csv")
 ```
 
 ```{r Real Estate Transfers Load-In}
@@ -763,7 +761,7 @@ transfers_count%>%
 
 ### Joining Open Data to Existing Panel
 ```{r SHORTCUT: Join 311 and Permits to panel_FireOPA}
-panel_OPAFireOpenData <- read_csv("Data/panel_OPAFireOpenData.csv")
+panel_OPAFireOpenData <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/panel_OPAFireOpenData.csv")
 ```
 
 ```{r Join 311 and Permits to panel_FireOPA,include=FALSE}
@@ -835,7 +833,7 @@ panel_FirePositivesDiff%>%
 ## Results (Boolean)
 The outcomes here can be used as the dependent variable for our model, when combined back with all the other properties. Our 2-years-after-fire results panel has 14,545 observations, down from the original data's ~21,000, so we lost about 40% of incidents. We'll have to check why. 
 ```{r SHORTCUT: Calculate Boolean Outcome Code}
-panel_Results2Y <- read_csv("Data/panel_Results2Y.csv")
+panel_Results2Y <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/panel_Results2Y.csv")
 ```
 
 ```{r Calculate Boolean Outcome Code}
@@ -867,50 +865,96 @@ panel_Results2Q <- panel_OPAFireOpenData %>%
 # Later: Join back to original dataset to get the spatial features
 ```
 
-# Feature Engineering 
-```{r}
-# Adding geometry from the original dataframe into our result panel
-#dat_clean <- dat %>% dplyr::select(address, geometry)
-#panel_Results2Y_sf <- left_join(panel_Results2Y, dat_clean, by="address")  
-#panel_Results2Y_sf <- panel_Results2Y_sf[!duplicated(panel_Results2Y_sf$incident_number),]
-#panel_Results2Y_sf <- st_as_sf(panel_Results2Y_sf) %>% st_transform(st_crs('ESRI:102729'))
+# Feature Engineering - add census and more building stuff
 
-# OPA - Creating an OPA dataset to get just the variables we want for feature engineering
-opa_dat_small_sf_fe <- opa_dat_small_sf %>% dplyr::select(address, total_livable_area, market_value,number_of_bedrooms, number_of_bathrooms)
+### OPA and Fire Dataset 
+```{r Cleaning Dataframes and Slight Engineering}
+# OPA - Creating an OPA dataset to get just the variables we want for feature engineering and doing slight feature engineering
+# Numeric
+opa_dat_small_sf_num <- opa_dat_small_sf %>% 
+  dplyr::select(address, total_livable_area, market_value, sale_price, number_of_bedrooms, number_of_bathrooms, number_stories, 
+  interior_condition) %>% st_drop_geometry()
+opa_dat_small_sf_num[is.na(opa_dat_small_sf_num)] <- 0 # Assigning 0 to NA for everything
+
+# Categorical
+opa_dat_small_sf_cat <- opa_dat_small_sf %>% 
+  dplyr::select(address, quality_grade, year_built, central_air, exterior_condition, fireplaces, fuel, taxable_building, 
+  topography, type_heater)  %>% st_drop_geometry()
+
+opa_dat_small_sf_fe <- left_join(opa_dat_small_sf_num,opa_dat_small_sf_cat, by = "address") # Joining
+
+# OPA - Quality Grade
+opa_dat_small_sf_fe <-
+  opa_dat_small_sf_fe %>%
+  mutate(grade = case_when(
+    quality_grade == "A+" |quality_grade == "A" | quality_grade == "A-" | quality_grade == "B+" | quality_grade == "B" | 
+      quality_grade == "B-"| quality_grade == "C+"| quality_grade == "C" ~ "Average or Better",
+    TRUE ~ "Below Average")) 
+
+# OPA - Fuel
+opa_dat_small_sf_fe <-
+  opa_dat_small_sf_fe %>%
+  mutate(fuel_type = case_when(
+    fuel == "A" | fuel == "B" ~ "Fossil",
+    fuel == "D" | fuel == "F" ~ "Solid", 
+    fuel == "C" | fuel == "E" ~ "Alternative", 
+    TRUE ~ "Other"))
+
+# OPA - Topography
+opa_dat_small_sf_fe <-
+  opa_dat_small_sf_fe %>%
+  mutate(topo = case_when(
+    topography == "A" ~ "Above Street Level",
+    topography == "B" ~ "Below Street Level", 
+    topography == "C" ~ "Flood Plain",
+    topography == "D" ~ "Rocky",
+    topography == "F" ~ "Street Level",
+    TRUE ~ "Other"))
+
+# OPA - Heater
+opa_dat_small_sf_fe <-
+  opa_dat_small_sf_fe %>%
+  mutate(electric_heater = case_when(
+    type_heater == "C" ~ "Yes",
+    TRUE ~ "No"))
+
+# OPA - Central Air
+opa_dat_small_sf_fe <-
+  opa_dat_small_sf_fe %>%
+  mutate(air_central = case_when(
+    central_air == "Y" ~ "Yes",
+    TRUE ~ "No"))
+
+# OPA - Fireplace
+opa_dat_small_sf_fe <-
+  opa_dat_small_sf_fe %>%
+  mutate(fireplace = case_when(
+    fireplaces > 0 ~ "Yes",
+    TRUE ~ "No"))
+
+# OPA - Year Built
+opa_dat_small_sf_fe$year_built <- as.numeric(as.character(opa_dat_small_sf_fe$year_built))
+
+# OPA - Cleaning
+opa_dat_small_sf_fe <- opa_dat_small_sf_fe %>% dplyr::select(-quality_grade, -central_air, -fuel, -topography, -type_heater)
 opa_dat_small_sf_fe[is.na(opa_dat_small_sf_fe)] <- 0 # Assigning 0 to NA for everything
 
-# Fire Data - Creating an OPA dataset to get just the variables we want for feature engineering
-dat_fe <- dat %>% dplyr::select(address, incident_type, number_of_exposures,fire_spread, no_spread, minor_damage, significant_damage, heavy_damage, extreme_damage)
-
-dat_fe$fire_spread[is.na(dat_fe$fire_spread)] <- 0
-dat_fe$fire_spread <- as.numeric(dat_fe$fire_spread)
-
-dat_fe <-dat_fe %>%
-  mutate(no_spread = case_when(
-    no_spread == "T" ~ 0,
-    TRUE ~ 1
-  ))
+# Fire Data - Creating an fire dataset to get just the variables we want for feature engineering
+dat_fe <- dat %>% dplyr::select(address, incident_type, number_of_exposures, minor_damage, significant_damage, heavy_damage, extreme_damage)
 ```
 
-```{r}
-# Joining panel_Results2Y with OPA FE variables
-panel_Results2Y_sf_TEST <- left_join(panel_Results2Y, opa_dat_small_sf_fe, by="address") # Join
-panel_Results2Y_sf_TEST[is.na(panel_Results2Y_sf_TEST)] <- 0 # Assigning 0 to NA for everything
-
-# Joining panel_Results2Y with Fire FE variables
-panel_Results2Y_sf_TEST <- left_join(panel_Results2Y_sf_TEST, dat_fe, by = "address") # Join
-panel_Results2Y_sf_TEST <- panel_Results2Y_sf_TEST %>% dplyr::select(-geometry.y) # Dropping new geometry
-panel_Results2Y_sf_TEST <- panel_Results2Y_sf_TEST %>% rename(geometry = geometry.x) # Renaming geometry
+```{r Joining}
+panel_Results2Y_sf <- left_join(panel_Results2Y, opa_dat_small_sf_fe, by="address") # Joining with OPA FE variables
+panel_Results2Y_sf[is.na(panel_Results2Y_sf)] <- 0 # Assigning 0 to NA for everything
 
 # Joining panel_Results2Y with Time outcome FE variables
 panel_FirePositivesDiff_fe <- panel_FirePositivesDiff %>% 
   dplyr::select(address, mSinceFire, ySinceFire, cat_code) %>% st_drop_geometry() # Condensing dataframe
-fire_panel <- merge(panel_Results2Y_sf_TEST,panel_FirePositivesDiff_fe ) # Join
-fire_panel <- final_panel[!duplicated(final_panel$incident_number),] # Removing Duplicates
+fire_panel <- merge(panel_Results2Y_sf,panel_FirePositivesDiff_fe ) # Join
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
 ```
 
-```{r}
-# Feature Engineering
+```{r Feature Engineering}
 # Turning outcomes into binary
 fire_panel <-fire_panel %>%
   mutate(vacant = case_when(
@@ -954,7 +998,7 @@ fire_panel <-
     number_of_bathrooms > 2 & number_of_bathrooms < 6 ~ "Medium", # 3-5 Bathrooms
     TRUE ~ "High")) # $6+
 
-# Livable Area - Maybe fix later
+# Livable Area 
 fire_panel <-
   fire_panel %>%
   mutate(area = case_when(
@@ -962,16 +1006,87 @@ fire_panel <-
     total_livable_area > 4999 & total_livable_area < 10000 ~ "Medium", # 5,001-10,000 sqft
     TRUE ~ "High")) # 10,001+ sqft
 
-fire_panel$toPredict <- 0 # Creating a toPredict column
-fire_panel_nogeo <- fire_panel %>% dplyr::select(-geometry)
+# Smoke Dector
+fire_panel <-
+  fire_panel %>%
+  mutate(built_year = case_when( # 1988 is when fire detectors became mandatory
+    year_built < 1988 ~ "Optional", # Prior to 1988
+    TRUE ~ "Mandatory")) # 1988 and after
+
+# Interior Condition
+fire_panel <-
+  fire_panel %>%
+  mutate(condition = case_when( 
+    interior_condition > 0 & interior_condition < 5 ~ "Average", 
+    interior_condition == 5 ~ "Below Average",
+    interior_condition == 6 ~ "Vacant",
+    interior_condition == 7 ~ "Sealed",
+    interior_condition == 0 ~ "Unknown")) 
+
+# Sale vs Market
+fire_panel <-
+  fire_panel %>%
+  mutate(value = case_when( 
+    sale_price > market_value ~ "Above Market", 
+    TRUE ~ "Below Market")) 
+
+dat_geo <- dat %>% dplyr::select(address, geometry) # Geometry
+fire_panel <- left_join(fire_panel, dat_geo, by = "address") # Joining to get geometry
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
+```
+
+### Neighborhoods
+```{r Adding Neighborhoods}
+# Load Data
+neighborhoods <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/Neighborhoods_Philadelphia/Neighborhoods_Philadelphia.geojson") %>% st_transform(crs = 3652) %>% dplyr::select(mapname, geometry) # Remove extra columns
+
+fire_panel_sf <- st_as_sf(fire_panel) %>% st_transform(st_crs(neighborhoods)) # Make sf
+
+fire_panel <- st_join(fire_panel_sf, neighborhoods) # Join
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
 
 ```
 
-Is this needed?
+### Fire Stations
 ```{r}
-fire_panel_vacant <- fire_panel_nogeo %>% filter(vacant == 1) %>% dplyr::select(-outcome_permit, -outcome_transfer, -permit, -transfer)
+stations <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/Fire_Dept_Facilities.geojson") %>% 
+  st_transform(crs = 3652) %>% dplyr::select(LOCATION, geometry)
 
-fire_panel_permit <- fire_panel_nogeo %>% filter(permit == 1) %>% dplyr::select(-outcome_vacant, -outcome_transfer, -vacant, -transfer)
+# Setting up nearest neighbors
+st_c <- st_coordinates
+nn_function <- function(measureFrom,measureTo,k) {
+  measureFrom_Matrix <-
+    as.matrix(measureFrom)
+  measureTo_Matrix <-
+    as.matrix(measureTo)
+  nn <-   
+    get.knnx(measureTo, measureFrom, k)$nn.dist
+  output <-
+    as.data.frame(nn) %>%
+    rownames_to_column(var = "thisPoint") %>%
+    gather(points, point_distance, V1:ncol(.)) %>%
+    arrange(as.numeric(thisPoint)) %>%
+    group_by(thisPoint) %>%
+    summarize(pointDistance = mean(point_distance)) %>%
+    arrange(as.numeric(thisPoint)) %>% 
+    dplyr::select(-thisPoint) %>%
+    pull()
+  
+  return(output)  
+}
+
+fire_panel <-
+  fire_panel %>% 
+    mutate(
+      stations_nn1 = nn_function(st_c(fire_panel), st_c(stations), 1),
+      stations_nn2 = nn_function(st_c(fire_panel), st_c(stations), 2), 
+      stations_nn3 = nn_function(st_c(fire_panel), st_c(stations), 3), 
+      stations_nn4 = nn_function(st_c(fire_panel), st_c(stations), 4), 
+      stations_nn5 = nn_function(st_c(fire_panel), st_c(stations), 5)) 
+
+fire_panel_nogeo <- fire_panel %>% st_drop_geometry() # USE THIS FOR MODELING, use fire_panel for maps
+
+#Neighborhoods with lower levels of fire department staffing and resources may experience longer response times and more difficulty in containing fires.
 ```
 
 ### The three chunks below might not be needed. Do not run for now
@@ -1037,11 +1152,6 @@ panelResults_Positive %>%
 
 ```
 
-
-
-
-
-
 # Modeling Strategy
 ```{r Model Set-Up}
 load.fun <- function(x) { 
@@ -1071,20 +1181,21 @@ for(i in seq_along(packages)){
 session_info()
 ```
 
-Change here
+QUESTION
+- so will we need three GLM models and three xgb models?
 ```{r Initial Split for Training and Test}
 # Vacant
-split_vacant <- initial_split(fire_panel_vacant, strata = "vacant", prop = 0.75)
+split_vacant <- initial_split(fire_panel_nogeo, strata = "vacant", prop = 0.75)
 train_vacant <- training(split_vacant)
 test_vacant <- testing(split_vacant)
 
 # Permit
-split_permit <- initial_split(fire_panel_permit, strata = "permit", prop = 0.75)
+split_permit <- initial_split(fire_panel_nogeo, strata = "permit", prop = 0.75)
 train_permit <- training(split_permit)
 test_permit <- testing(split_permit)
 
 # Transfer
-split_transfer <- initial_split(panel_Results2Y_sf_TEST_nogeo, strata = "transfer", prop = 0.75)
+split_transfer <- initial_split(fire_panel_nogeo, strata = "transfer", prop = 0.75)
 train_transfer <- training(split_transfer)
 test_transfer <- testing(split_transfer)
 ```
@@ -1129,6 +1240,8 @@ model_rec_transfer <- recipe(outcome_transfer ~ ., data = train_transfer) %>%
 glimpse(model_rec %>% prep() %>% juice())
 ```
 
+QUESTION
+- is a spatial cross validation needed for this? time?
 ```{r Model Specifications}
 #GLM
 glmnet_plan <- 
@@ -1346,7 +1459,9 @@ xgb_val_fit_geo <- xgb_best_wf %>%
 
 ```
 
-# GLM Models - what would our dependent variable be 
+# GLM Models
+QUESTION
+- what would our dependent variable be? the outcome or time? for example: vacant or mSinceFire 
 ```{r Vacant }
 # Do not add livable area, market value, or incident type
 model_vacant <- glm(as.factor(mSinceFire) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + value + bedrooms + bathrooms + area + cat_code, 
@@ -1385,6 +1500,8 @@ caret::confusionMatrix(reference = as.factor(testProbs$Outcome),
                        positive = "1") 
 ```
 
+QUESTION
+- how would we interpret the predictions?  - what is the probablity of x within two years
 ```{r Permit}
 # Do not add livable area, market value, or incident type
 model_permit <- glm(as.factor(mSinceFire) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + value + bedrooms + bathrooms + area + cat_code, 
@@ -1422,8 +1539,6 @@ caret::confusionMatrix(reference = as.factor(testProbs$Outcome),
                        data = as.factor(testProbs$Probs), 
                        positive = "1") 
 
-
-
 testing <-
   test_permit %>%
   mutate(Price.Predict = predict(model_permit, test_permit),
@@ -1434,8 +1549,14 @@ testing <-
 
 ```{r Transfer}
 # Do not add livable area, market value, or incident type
-model_transfer <- glm(as.factor(transfer) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + vacant + permit + value + bedrooms + bathrooms + area, 
-              family="binomial"(link="logit"), data = train_transfer)
+model_transfer <- glm(as.factor(transfer) ~ severity_index + outcome_vacant + outcome_permit + outcome_transfer + quarter + 
+                        number_stories + exterior_condition + grade + fuel_type + topo + electric_heater + air_central + 
+                        fireplace + mSinceFire + cat_code + value + mapname +  bedrooms + bathrooms + area + built_year + 
+                        condition,
+                  family="binomial"(link="logit"), data = train_transfer)
+
+# severity_index + outcome_vacant + outcome_permit + outcome_transfer + quarter + number_stories + exterior_condition + grade + fuel_tyoe + topo + electric_heater + air_central + fireplace + mSinceFire + cat_code + value + mapname + stations_nn1 + stations_nn2 + stations_nn3 + stations_nn4 + stations_nn5 + bedrooms + bathrooms + area + built_year + condition
+
 summary(model_transfer)
 
 classProbs <- predict(model_transfer, train_transfer, type="response")
