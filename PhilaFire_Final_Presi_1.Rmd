@@ -510,7 +510,7 @@ g(opa_dat)
 ```{r OPA Setup, echo=TRUE}
 # Reducing columns
 opa_dat_small_sf <- opa_dat[!duplicated(opa_dat$location),] %>%
-  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade, central_air, exterior_condition, fireplaces, fuel, taxable_building, topography, type_heater, sale_price, separate_utilities)%>%
+  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, building_code_new, building_code_description_new, total_area, total_livable_area, owner_1, owner_2, market_value, market_value_date, mailing_street, number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, assessment_date, year_built, year_built_estimate, zoning, quality_grade, central_air, exterior_condition, fireplaces, fuel, taxable_building, topography, type_heater, sale_price, separate_utilities)%>%
   rename(address = location)
 
 # Filtering for residential properties
@@ -784,11 +784,16 @@ panel_Positives <- panel_OPAFireOpenData %>%
 
 #filter to just fires, then combine those addresses with additional outcomes and building categories
 panel_FirePositives <- panel_OPAFireOpenData %>%
-  filter(count > 0) %>%
-  dplyr::select(address) %>%
+  filter(count > 0)%>%
+  dplyr::select(address)%>%
   distinct(address, .keep_all = TRUE)%>%
-  left_join(panel_Positives, by="address") %>%
-  left_join(dplyr::select(opa_dat_small_sf, address, category_code_description), by="address")%>%
+  left_join(panel_Positives, by="address")%>%
+  left_join(dplyr::select(opa_dat_small_sf, address, category_code_description, mailing_street, building_code_description), by="address")%>%
+  mutate(condo = ifelse(grepl("CONDO", building_code_description) == TRUE, TRUE, FALSE),
+          owner_occ = ifelse(condo == FALSE & category_code_description != "MULTI FAMILY",
+                             ifelse(address == mailing_street, TRUE, FALSE),
+                             NA))%>%
+  dplyr::select(-mailing_street, -condo, -building_code_description)%>%
   st_drop_geometry()
   #mutate(diff = interval(lag(quarter, n=1),quarter) %/% years(1))  
 
@@ -949,7 +954,7 @@ panel_Results2Y_sf[is.na(panel_Results2Y_sf)] <- 0 # Assigning 0 to NA for every
 
 # Joining panel_Results2Y with Time outcome FE variables
 panel_FirePositivesDiff_fe <- panel_FirePositivesDiff %>% 
-  dplyr::select(address, mSinceFire, ySinceFire, cat_code) %>% st_drop_geometry() # Condensing dataframe
+  dplyr::select(address, mSinceFire, ySinceFire, cat_code, owner_occ) %>% st_drop_geometry() # Condensing dataframe
 fire_panel <- merge(panel_Results2Y_sf,panel_FirePositivesDiff_fe ) # Join
 fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
 ```
@@ -977,7 +982,7 @@ fire_panel <-fire_panel %>%
 # Market Value
 fire_panel <-
   fire_panel %>%
-  mutate(value = case_when(
+  mutate(mkt_value = case_when(
     market_value < 25000 ~ "Low", # < $250,000
     market_value > 24999 & market_value < 500000 ~ "Medium", # $250,000-$500,000
     TRUE ~ "High")) # $500,000+
@@ -1006,14 +1011,15 @@ fire_panel <-
     total_livable_area > 4999 & total_livable_area < 10000 ~ "Medium", # 5,001-10,000 sqft
     TRUE ~ "High")) # 10,001+ sqft
 
-# Smoke Dector
+# Year Built
 fire_panel <-
   fire_panel %>%
-  mutate(built_year = case_when( # 1988 is when fire detectors became mandatory
-    year_built < 1988 ~ "Optional", # Prior to 1988
-    TRUE ~ "Mandatory")) # 1988 and after
+  mutate(built_year = case_when(
+    year_built < 1951 ~ "Up to 1951", 
+    year_built > 1959 & year_built < 2000 ~ "1950 to 1999",
+    TRUE ~ "2000 to Present")) 
 
-# Interior Condition
+# Interior Condition when fire happened - Fire in 2018 and condition is how it is today. remove?
 fire_panel <-
   fire_panel %>%
   mutate(condition = case_when( 
@@ -1026,9 +1032,17 @@ fire_panel <-
 # Sale vs Market
 fire_panel <-
   fire_panel %>%
-  mutate(value = case_when( 
+  mutate(sale_value = case_when( 
     sale_price > market_value ~ "Above Market", 
     TRUE ~ "Below Market")) 
+
+# Sale vs Market
+fire_panel <-
+  fire_panel %>%
+  mutate(resident_type = case_when( 
+    owner_occ == "TRUE" ~ "Owner", 
+    owner_occ == "FALSE" ~ "Renter", 
+    TRUE ~ "Other")) 
 
 dat_geo <- dat %>% dplyr::select(address, geometry) # Geometry
 fire_panel <- left_join(fire_panel, dat_geo, by = "address") # Joining to get geometry
@@ -1045,6 +1059,7 @@ fire_panel_sf <- st_as_sf(fire_panel) %>% st_transform(st_crs(neighborhoods)) # 
 fire_panel <- st_join(fire_panel_sf, neighborhoods) # Join
 fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
 
+fire_panel <- fire_panel %>% rename(neighborhood = mapname) # Renaming
 ```
 
 ### Fire Stations
@@ -1084,10 +1099,105 @@ fire_panel <-
       stations_nn4 = nn_function(st_c(fire_panel), st_c(stations), 4), 
       stations_nn5 = nn_function(st_c(fire_panel), st_c(stations), 5)) 
 
-fire_panel_nogeo <- fire_panel %>% st_drop_geometry() # USE THIS FOR MODELING, use fire_panel for maps
-
 #Neighborhoods with lower levels of fire department staffing and resources may experience longer response times and more difficulty in containing fires.
 ```
+
+### Tax Deliquency -- Iffy on this
+```{r}
+#https://www.opendataphilly.org/dataset/property-tax-delinquencies
+deliquent <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/real_estate_tax_delinquencies.geojson") %>% 
+  st_transform(crs = 3652)
+```
+
+### Redevelopment Certified Areas
+```{r}
+#https://www.opendataphilly.org/dataset/redevelopment-certified-areas
+
+rca <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/Redevelopment_Certified_Areas.geojson") %>% 
+  st_transform(crs = 3652) %>% dplyr::select(NAME)
+
+fire_panel <- st_join(fire_panel, rca) # Join
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
+
+# 
+fire_panel <-fire_panel %>%
+  mutate(redevelopment_area = case_when(
+    is.na(fire_panel$NAME) ~ 0, # Is not in a redevelopment certified area
+    TRUE ~ 1 # Is in a redevelopment certified area
+  ))
+
+fire_panel <- fire_panel %>% dplyr::select(-NAME)
+```
+
+### Demographics
+```{r}
+census_api_key("05b9c101eb2ee7dc7abb88140da527ce637ac07f", overwrite = TRUE)
+
+acs_fe <- c("B19013_001", "B11005_001", "B02001_002", "B02001_003", "B02001_004", "B02001_005", "B02001_006", "B02001_007", "B02001_008","B03002_001")
+# Income, Age, White, Black, AIAN, Asian, NHPI, Other, Two or More, Hispanic
+
+acs_data <- load_variables(year = 2019, dataset = "acs5", cache = TRUE)
+
+acs_features <- get_acs(geography = "tract",
+                             year = 2020, 
+                             variables = acs_fe, # Income, Age, Race
+                             geometry = TRUE, 
+                             state = "PA", 
+                             county = "Philadelphia", 
+                             output = "wide") %>% st_transform(st_crs(neighborhoods))
+
+acs_features <- acs_features %>% rename(income = B19013_001E, 
+                                        age = B11005_001E, 
+                                        white = B02001_002E,
+                                        black = B02001_003E,
+                                        AIAN = B02001_004E,
+                                        asian = B02001_005E,
+                                        NHPI = B02001_006E,
+                                        other = B02001_007E,
+                                        multi = B02001_008E,
+                                        hispanic = B03002_001E) %>% 
+  dplyr::select(income, age, white, black, AIAN, asian, NHPI, other, multi, hispanic)
+
+acs_features <- acs_features %>%
+  mutate(majority_white = case_when(
+    white > sum(black + AIAN + asian + NHPI + other + multi + hispanic) ~ "Yes",
+    TRUE ~ "No"
+  ))
+fire_panel <- st_join(fire_panel, acs_features) 
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
+
+# Poverty
+fire_panel <-
+  fire_panel %>%
+  mutate(poverty = case_when( 
+    income < 25000 ~ "Yes", 
+    TRUE ~ "No")) 
+
+# Income Level - 40k is best so far
+fire_panel <-
+  fire_panel %>%
+  mutate(income_level = case_when(
+    income < 40000 ~ "Low", 
+    TRUE ~ "High")) 
+
+# Price per sqft
+fire_panel <-
+  fire_panel %>%
+  mutate(value_sqft = market_value/total_livable_area) 
+
+fire_panel$value_sqft[!is.finite(fire_panel$value_sqft)] <- 0
+
+
+fire_panel_nogeo <- fire_panel %>% st_drop_geometry() # USE THIS FOR MODELING, use fire_panel for maps
+
+
+```
+
+### Crime
+### Looks Vacant
+### Building Demolitions
+
+# FIX GEOEMTRY WITH DAT_FE AT SOME POINT 
 
 ### The three chunks below might not be needed. Do not run for now
 The table below is the number of fires that had a particular outcome. These are not mutually exclusive, so some fires had two or all three outcomes.
@@ -1152,6 +1262,7 @@ panelResults_Positive %>%
 
 ```
 
+
 # Modeling Strategy
 ```{r Model Set-Up}
 load.fun <- function(x) { 
@@ -1181,21 +1292,19 @@ for(i in seq_along(packages)){
 session_info()
 ```
 
-QUESTION
-- so will we need three GLM models and three xgb models?
 ```{r Initial Split for Training and Test}
 # Vacant
-split_vacant <- initial_split(fire_panel_nogeo, strata = "vacant", prop = 0.75)
+split_vacant <- initial_split(fire_panel_nogeo, strata = "vacant", prop = 0.70) # do 70 or 75
 train_vacant <- training(split_vacant)
 test_vacant <- testing(split_vacant)
 
 # Permit
-split_permit <- initial_split(fire_panel_nogeo, strata = "permit", prop = 0.75)
+split_permit <- initial_split(fire_panel_nogeo, strata = "permit", prop = 0.70)
 train_permit <- training(split_permit)
 test_permit <- testing(split_permit)
 
 # Transfer
-split_transfer <- initial_split(fire_panel_nogeo, strata = "transfer", prop = 0.75)
+split_transfer <- initial_split(fire_panel_nogeo, strata = "transfer", prop = 0.70)
 train_transfer <- training(split_transfer)
 test_transfer <- testing(split_transfer)
 ```
@@ -1460,25 +1569,56 @@ xgb_val_fit_geo <- xgb_best_wf %>%
 ```
 
 # GLM Models
-QUESTION
-- what would our dependent variable be? the outcome or time? for example: vacant or mSinceFire 
-```{r Vacant }
-# Do not add livable area, market value, or incident type
-model_vacant <- glm(as.factor(mSinceFire) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + value + bedrooms + bathrooms + area + cat_code, 
-              family="binomial"(link="logit"), data = train_vacant)
-summary(model_vacant) 
+### Vacant
+- Unemployment
+- Crime
+```{r Vacant}
+model_vacant_1 <- glm(vacant ~ severity_index + total_livable_area + resident_type + neighborhood + market_value + grade + 
+                        redevelopment_area,
+                  family="binomial" (link="logit"), data = train_vacant)
 
-classProbs <- predict(model_vacant, train_vacant, type="response")
+model_vacant_2 <- glm(vacant ~ severity_index + total_livable_area + market_value + resident_type,
+                  family="binomial" (link="logit"), data = train_vacant) 
+
+model_vacant_3 <- glm(vacant ~ severity_index + total_livable_area + mkt_value + resident_type,
+                  family="binomial" (link="logit"), data = train_vacant) 
+
+model_vacant_4 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + ,
+                  family="binomial" (link="logit"), data = train_vacant) 
+
+model_vacant_5 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income,
+                  family="binomial" (link="logit"), data = train_vacant) 
+
+model_vacant_6 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income + white + black + AIAN + asian + NHPI 
+                      + other + multi + hispanic,
+                  family="binomial" (link="logit"), data = train_vacant) 
+
+model_vacant_7 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income + asian  
+                      + other + multi + mSinceFire,
+                  family="binomial" (link="logit"), data = train_vacant) # Best model so far
+
+model_vacant_8 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income_level + asian  
+                      + other + multi + mSinceFire,
+                  family="binomial" (link="logit"), data = train_vacant) 
+
+summary(model_vacant_8)
+```
+
+```{r}
+classProbs <- predict(model_vacant_8, train_vacant, type="response")
 hist(classProbs)
 
 testProbs <- data.frame(Outcome = as.factor(test_vacant$vacant),
-                        Probs = predict(model_vacant, test_vacant, type= "response"))
-head(testProbs)
+                        Probs = predict(model_vacant_8, test_vacant, type= "response"))
 testProbs <-
   testProbs %>%
   na.omit()
 
 palette2 <- c("#981FAC","#FF006A")
+
+library(plotROC)
+library(pROC)
+
 ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
   geom_density() +
   facet_grid(Outcome ~ .) +
@@ -1494,31 +1634,62 @@ ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
   geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
   labs(title = "Figure 5: ROC Curve - Tax Credit")
 
+pROC::auc(testProbs$Outcome, testProbs$Probs) 
+# Model 2 - AUC: .69 
+# Model 3 - AUC: .68 
+# Model 4 - AUC: .69 
+# Model 5 - AUC: .70
+# Model 6 - AUC: .72
+# Model 7 - AUC: .73
+# Model 8 - AUC: .73
+
 testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
 caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
                        data = as.factor(testProbs$Probs), 
                        positive = "1") 
+# Model 2 - Accuracy: .57 
+# Model 3 - Accuracy: .57 
+# Model 4 - Accuracy: .56 
+# Model 5 - Accuracy: .59 
+# Model 6 - Accuracy: .60 
+# Model 7 - Accuracy: .63 
+# Model 8 - Accuracy: .63 
+
 ```
 
-QUESTION
-- how would we interpret the predictions?  - what is the probablity of x within two years
+### Permit
+- Distance to Parks
+- Distance to Schools
+- Distance to Transit
+- Distance to Commercial Corridors
+- Business Licenses
+- Redevelopment Areas
 ```{r Permit}
-# Do not add livable area, market value, or incident type
-model_permit <- glm(as.factor(mSinceFire) ~ severity_index + number_of_exposures + fire_spread + no_spread + minor_damage + significant_damage + heavy_damage + extreme_damage + value + bedrooms + bathrooms + area + cat_code, 
-              family="binomial"(link="logit"), data = train_permit)
-summary(model_permit)
+model_permit_1 <- glm(permit ~ severity_index + mkt_value + sale_value + number_of_bedrooms + number_of_bathrooms + number_stories + interior_condition + year_built + exterior_condition + fireplaces + grade + fuel_type + topo + electric_heater + air_central + fireplace + mSinceFire + cat_code + resident_type + income + age + white + black + AIAN + asian + NHPI + other + multi + hispanic + poverty + value_sqft + income_level,
+                  family="binomial" (link="logit"), data = train_permit) # Best model so far
 
-classProbs <- predict(model_permit, train_permit, type="response")
+model_permit_2 <- glm(permit ~ severity_index + exterior_condition + air_central + mSinceFire + 
+                        cat_code + resident_type + poverty + value_sqft + income_level,
+                  family="binomial" (link="logit"), data = train_permit) # Best model so far
+
+summary(model_permit_2)
+```
+
+```{r}
+classProbs <- predict(model_permit_2, train_vacant, type="response")
 hist(classProbs)
 
-testProbs <- data.frame(Outcome = as.factor(test_permit$permit),
-                        Probs = predict(model_permit, test_permit, type= "response"))
-head(testProbs)
+testProbs <- data.frame(Outcome = as.factor(test_vacant$vacant),
+                        Probs = predict(model_permit_2, test_vacant, type= "response"))
 testProbs <-
   testProbs %>%
   na.omit()
 
 palette2 <- c("#981FAC","#FF006A")
+
+library(plotROC)
+library(pROC)
+
 ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
   geom_density() +
   facet_grid(Outcome ~ .) +
@@ -1534,60 +1705,49 @@ ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
   geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
   labs(title = "Figure 5: ROC Curve - Tax Credit")
 
+pROC::auc(testProbs$Outcome, testProbs$Probs) 
+# Model 2 - AUC: .69 
+# Model 3 - AUC: .68 
+# Model 4 - AUC: .69 
+# Model 5 - AUC: .70
+# Model 6 - AUC: .72
+# Model 7 - AUC: .73
+# Model 8 - AUC: .73
+
 testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
 caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
                        data = as.factor(testProbs$Probs), 
                        positive = "1") 
-
-testing <-
-  test_permit %>%
-  mutate(Price.Predict = predict(model_permit, test_permit),
-         Price.Error = Price.Predict - mSinceFire,
-         Price.AbsError = abs(Price.Predict - mSinceFire),
-         Price.APE = (abs(Price.Predict - mSinceFire)) / Price.Predict)
+# Model 2 - Accuracy: .57 
+# Model 3 - Accuracy: .57 
+# Model 4 - Accuracy: .56 
+# Model 5 - Accuracy: .59 
+# Model 6 - Accuracy: .60 
+# Model 7 - Accuracy: .63 
+# Model 8 - Accuracy: .63 
 ```
 
+### Transfer -- 
+- House Features
+- Distance to Schools
+- Distance to Transit
+- Demographic (is the area changing?)
+- Income (is the area changing?)
 ```{r Transfer}
-# Do not add livable area, market value, or incident type
-model_transfer <- glm(as.factor(transfer) ~ severity_index + outcome_vacant + outcome_permit + outcome_transfer + quarter + 
-                        number_stories + exterior_condition + grade + fuel_type + topo + electric_heater + air_central + 
-                        fireplace + mSinceFire + cat_code + value + mapname +  bedrooms + bathrooms + area + built_year + 
-                        condition,
-                  family="binomial"(link="logit"), data = train_transfer)
 
-# severity_index + outcome_vacant + outcome_permit + outcome_transfer + quarter + number_stories + exterior_condition + grade + fuel_tyoe + topo + electric_heater + air_central + fireplace + mSinceFire + cat_code + value + mapname + stations_nn1 + stations_nn2 + stations_nn3 + stations_nn4 + stations_nn5 + bedrooms + bathrooms + area + built_year + condition
-
-summary(model_transfer)
-
-classProbs <- predict(model_transfer, train_transfer, type="response")
-hist(classProbs)
-
-testProbs <- data.frame(Outcome = as.factor(test_transfer$transfer),
-                        Probs = predict(model_transfer, test_transfer, type= "response"))
-head(testProbs)
-testProbs <-
-  testProbs %>%
-  na.omit()
-
-palette2 <- c("#981FAC","#FF006A")
-ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
-  geom_density() +
-  facet_grid(Outcome ~ .) +
-  scale_fill_manual(values = palette2) +
-  labs(x = "Credit", y = "Density of probabilities",
-       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
-  theme(strip.text.x = element_text(size = 18),
-        legend.position = "none")
-
-ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
-  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
-  style_roc(theme = theme_grey) +
-  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
-  labs(title = "Figure 5: ROC Curve - Tax Credit")
-
-testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
-caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
-                       data = as.factor(testProbs$Probs), 
-                       positive = "1") 
 ```
+
+To-Do:
+- Friday: 
+---- Myron (nearest neighbor) and Kendra (demographics, income, crime, unemployment) feature engineer
+---- Finish modeling. Do not touch vacancy, try to get permit/transfer to at least 50% accuracy
+
+- Saturday: 
+---- (AM) Myron writes modeling, both work on plots and maps
+---- (PM) Kendra works on presentation 
+
+- Sunday: 
+---- Final touches
+
+
 
