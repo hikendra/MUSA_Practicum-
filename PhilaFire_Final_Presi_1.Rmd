@@ -1174,9 +1174,10 @@ fire_panel <-
 
 fire_panel$value_sqft[!is.finite(fire_panel$value_sqft)] <- 0
 
-
-fire_panel_nogeo <- fire_panel %>% st_drop_geometry() # USE THIS FOR MODELING, use fire_panel for maps
-
+fire_panel_nogeo <- fire_panel %>% st_drop_geometry()
+fire_panel <- left_join(fire_panel_nogeo, dat_geo, by="address")
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
+fire_panel_nogeo <- fire_panel %>% st_drop_geometry()
 
 ```
 
@@ -1653,17 +1654,69 @@ caret::confusionMatrix(reference = as.factor(testProbs$Outcome),
 - Redevelopment Areas
 ```{r Permit}
 model_permit_1 <- glm(permit ~ severity_index + mkt_value + sale_value + number_of_bedrooms + number_of_bathrooms + number_stories + interior_condition + year_built + exterior_condition + fireplaces + grade + fuel_type + topo + electric_heater + air_central + fireplace + mSinceFire + cat_code + resident_type + income + age + white + black + AIAN + asian + NHPI + other + multi + hispanic + poverty + value_sqft + income_level,
+                  family="binomial" (link="logit"), data = train_permit) 
+
+model_permit_2 <- glm(permit ~ severity_index + exterior_condition + air_central + 
+                        cat_code + resident_type + poverty + value_sqft + income_level ,
                   family="binomial" (link="logit"), data = train_permit) # Best model so far
 
-model_permit_2 <- glm(permit ~ severity_index + exterior_condition + air_central + mSinceFire + 
-                        cat_code + resident_type + poverty + value_sqft + income_level,
-                  family="binomial" (link="logit"), data = train_permit) # Best model so far
-
-summary(model_permit_2)
+summary(model_permit_1)
 ```
 
 ```{r}
-classProbs <- predict(model_permit_2, train_vacant, type="response")
+classProbs <- predict(model_permit_1, train_permit, type="response")
+hist(classProbs)
+
+testProbs <- data.frame(Outcome = as.factor(test_permit$permit),
+                        Probs = predict(model_permit_1, test_permit, type= "response"))
+testProbs <-
+  testProbs %>%
+  na.omit()
+
+palette2 <- c("#981FAC","#FF006A")
+
+library(plotROC)
+library(pROC)
+
+ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
+  geom_density() +
+  facet_grid(Outcome ~ .) +
+  scale_fill_manual(values = palette2) +
+  labs(x = "Credit", y = "Density of probabilities",
+       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
+  theme(strip.text.x = element_text(size = 18),
+        legend.position = "none")
+
+ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
+  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
+  style_roc(theme = theme_grey) +
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
+  labs(title = "Figure 5: ROC Curve - Tax Credit")
+
+pROC::auc(testProbs$Outcome, testProbs$Probs) 
+
+testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
+caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
+                       data = as.factor(testProbs$Probs), 
+                       positive = "1") 
+
+
+```
+
+### Transfer -- 
+- House Features
+- Distance to Schools
+- Distance to Transit
+- Demographic (is the area changing?)
+- Income (is the area changing?)
+```{r Transfer}
+model_transfer_1 <- glm(transfer ~ severity_index + exterior_condition + air_central + 
+                        cat_code + resident_type + poverty + value_sqft + income_level,
+                  family="binomial" (link="logit"), data = train_transfer)
+```
+
+```{r}
+classProbs <- predict(model_transfer_1, train_vacant, type="response")
 hist(classProbs)
 
 testProbs <- data.frame(Outcome = as.factor(test_vacant$vacant),
@@ -1693,34 +1746,13 @@ ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
   labs(title = "Figure 5: ROC Curve - Tax Credit")
 
 pROC::auc(testProbs$Outcome, testProbs$Probs) 
-# Model 2 - AUC: .69 
-# Model 3 - AUC: .68 
-# Model 4 - AUC: .69 
-# Model 5 - AUC: .70
-# Model 6 - AUC: .72
-# Model 7 - AUC: .73
-# Model 8 - AUC: .73
+
 
 testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
 caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
                        data = as.factor(testProbs$Probs), 
                        positive = "1") 
-# Model 2 - Accuracy: .57 
-# Model 3 - Accuracy: .57 
-# Model 4 - Accuracy: .56 
-# Model 5 - Accuracy: .59 
-# Model 6 - Accuracy: .60 
-# Model 7 - Accuracy: .63 
-# Model 8 - Accuracy: .63 
-```
 
-### Transfer -- 
-- House Features
-- Distance to Schools
-- Distance to Transit
-- Demographic (is the area changing?)
-- Income (is the area changing?)
-```{r Transfer}
 
 ```
 
