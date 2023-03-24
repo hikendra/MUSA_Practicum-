@@ -89,19 +89,6 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 ```{r Box Set Up, include=FALSE}
 #Loading in Fire Data 
 ## INSERT BOX WORKFLOW HERE ##
-#box_auth(client_id = "5uqluwfy2fsqfwts7hfofn1yuq5q3snf", 
-#         client_secret = "y11sGdz8felfrTpT7cSWzhS0QXOZOkKi")
-
-# Myron
-box_auth(client_id = "zhmuvtkofhuu21py025uhr8cffzew2om", 
-         client_secret = "k39pMJM1FUnBmGnRrM9zVUWk1eth0EVi")
-box_setwd(186732420366)
-
-box_getwd() 
-clist <- box_ls() %>% as.data.frame()
-
-## read in a csv (there are a bunch of `box_read` functions for common file types)
-structureFire <- box_read_excel(1093000179542)
 
 dat <- structureFire
 
