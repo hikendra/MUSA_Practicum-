@@ -256,6 +256,11 @@ opa_dat <- opa_dat%>%
   drop_na(lat, lng)%>%
   st_as_sf(coords = c("lat", "lng"),
            crs = "EPSG:4326")
+
+opa_hist <- read_csv("../Data/.csv")
+
+
+
 ```
 
 ### Cleaning
@@ -406,38 +411,6 @@ box_write(dta_m, "propMatch_v02.csv")
 
 ```
 
-# Examining covariate balance in matched sample
-
-```{r}
-
-table()
-
-fn_bal <- function(dta, variable) {
-  dta$variable <- dta[, variable]
-  if (variable == 'w3income') dta$variable <- dta$variable / 10^3
-  dta$fire <- as.factor(dta$fire)
-  support <- c(min(dta$variable), max(dta$variable))
-  ggplot(dta, aes(x = distance, y = variable, color = fire)) +
-    geom_point(alpha = 0.2, size = 1.3) +
-    geom_smooth(method = "loess", se = F) +
-    xlab("Propensity score") +
-    ylab(variable) +
-    theme_bw() +
-    ylim(support)
-}
-
-library(gridExtra)
-grid.arrange(
-   fn_bal(dta_m, "total_livable_area"),
-   fn_bal(dta_m, "number_of_bedrooms") + theme(legend.position = "none"),
-   fn_bal(dta_m, "Price_Sqft"),
-   fn_bal(dta_m, "Med_Income") + theme(legend.position = "none"),
-   fn_bal(dta_m, "Perc_White"),
-   nrow = 3, widths = c(1, 0.8)
-)
-
-```
-
 #Difference In Means
 
 ```{r}
@@ -453,41 +426,204 @@ dta_m %>%
 ```{r}
 
 dta_m%>%
-  filter(subclass == 1466)
+  filter(subclass == 14)
 
 dta_m%>%
   filter(address == "8105 THOURON AVE")
 
 ```
 
-```{r}
+## Rest of the tutorial set
 
-lapply(ecls_cov, function(v) {
-    t.test(dta_m[, v] ~ dta_m$catholic)
-})
+```{r}
+# 
+# lapply(ecls_cov, function(v) {
+#     t.test(dta_m[, v] ~ dta_m$catholic)
+# })
 
 ```
 
-# Estimating Treatment Effects
+## Estimating Treatment Effects
 
 ```{r}
 
-with(dta_m, t.test(c5r2mtsc_std ~ catholic))
-
-```
-
-```{r}
-
-lm_treat1 <- lm(c5r2mtsc_std ~ catholic, data = dta_m)
-summary(lm_treat1)
+# with(dta_m, t.test(c5r2mtsc_std ~ catholic))
 
 ```
 
 ```{r}
 
-lm_treat2 <- lm(c5r2mtsc_std ~ catholic + race_white + p5hmage +
-                  I(w3income / 10^3) + p5numpla + w3momed_hsb, data = dta_m)
-summary(lm_treat2)
+# lm_treat1 <- lm(c5r2mtsc_std ~ catholic, data = dta_m)
+# summary(lm_treat1)
 
 ```
 
+# Calculating Differences Between Prop-Matched Structures
+
+## Loading In Data
+
+```{r Loading Panel}
+
+panel_opa <- read_csv("../Data/panel_OPA_Fire_OpenData.csv")
+
+g(panel_opa)
+
+```
+## Filter Panel By Addresses in Prop-Matched Set
+
+```{r}
+
+#assign fire time and incident number to one member of the subclass
+dta_m_1 <- dta_m %>%
+  filter(fire == 1)%>%
+  left_join(st_drop_geometry(dplyr::select(dat, incident_number, address, quarter)))
+
+#assign same data to other member of the subclass
+dta_m_2 <- dta_m %>%
+  filter(fire == 0)%>%
+  left_join(st_drop_geometry(dplyr::select(dta_m_1, incident_number, quarter, subclass)), by="subclass")
+
+dta_m_withTime <- rbind(dta_m_1, dta_m_2) #combine sets
+
+panel_pm_4Y <- panel_opa%>%
+  inner_join(dta_m_withTime, by="address")%>%
+  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
+         ySinceFire = mSinceFire / 12)%>%
+  filter(mSinceFire >= -49,#Eliminate entries before fires (occurs because of incident_number group duplicates)
+         mSinceFire < 49, #Eliminate entries after four years, as they are irrelevant (arbitrary)
+         !(count > 0 & ySinceFire > 0))%>% #For addresses with multiple incidents, take out repeated fire observ's
+  st_as_sf()
+
+panel_pm_4Y$count <- as.factor(panel_pm_4Y$count)
+
+
+panel_pm_4YForward <- panel_opa%>%
+  inner_join(dta_m_withTime, by="address")%>%
+  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
+         ySinceFire = mSinceFire / 12)%>%
+  filter(mSinceFire >= -1,#Eliminate entries before fires (occurs because of incident_number group duplicates)
+         mSinceFire < 49, #Eliminate entries after four years, as they are irrelevant (arbitrary)
+         !(count > 0 & ySinceFire > 0))%>% #For addresses with multiple incidents, take out repeated fire observ's
+  st_as_sf()
+
+
+#2 Year Outcomes for Each Incident
+panel_pm_Results2Y <- panel_pm_4YForward %>%
+    st_drop_geometry()%>%
+    filter(., ySinceFire <= 2)%>%
+    group_by(address, incident_number, subclass, fire)%>%
+    summarize(count = ifelse(sum(count) > 0, 1, 0),
+              severity_index = max(severity_index),
+              outcome_vacant = sum(n_Vacant),
+              outcome_permit = sum(n_permits),
+              outcome_transfer = sum(n_transfers),
+              quarter = min(quarter.x))
+  
+
+```
+
+```{r}
+
+#testing different addresses to verify results
+panel_pm_test <- panel_pm%>% filter(address == "1162 E PASSYUNK AVE")
+dat_pm_test <- dat%>% filter(incident_number == "181230716")
+
+
+
+```
+#Graph Outcome Proximity to Fires
+
+```{r}
+
+#Distribution of Outcomes, Measuring Time between Fire and Outcome
+panel_pm_4Y%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, ySinceFire, fire)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value > 0)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(method = "lm", se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+
+```
+## Map of Same Outcomes (Forward)
+
+```{r}
+
+#Fires
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(fire == 1)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(color = "#20b1ae", size=0.9, alpha = 0.5)+
+    labs(title = "Fires with Property Transfers, by Years since Fire") +
+    mapTheme()
+
+#No Fires
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(fire == 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(color = "#3f3128", size=0.9, alpha = 0.5)+
+    labs(title = "Fires with Property Transfers, by Years since Fire") +
+    mapTheme()
+
+#Distribution of Outcomes, Measuring Time between Fire and Outcome
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012,
+         fire == 1)%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, ySinceFire, fire)%>%
+  gather(Variable, value, -ySinceFire, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=ySinceFire), size=0.9)+
+    scale_color_viridis_c()+
+    facet_wrap(~Variable)+
+    labs(title = "Fires with Property Transfers, by Years since Fire") +
+    mapTheme()
+  
+#Distribution of Outcomes, Measuring Time between Fire and Outcome
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012,
+         fire == 0)%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, ySinceFire, fire)%>%
+  gather(Variable, value, -ySinceFire, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=ySinceFire), size=0.9)+
+    scale_color_viridis_c()+
+    facet_wrap(~Variable)+
+    labs(title = "Prop-Matched Set, No Fires, by Years since Fire") +
+    mapTheme()
+  
+
+```
+
+
+
+```{r}
+
+panel_opa <- read_csv("../Data/panel_OPA_Fire_OpenData.csv")
+
+```

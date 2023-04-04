@@ -83,7 +83,6 @@ PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West 
 ## INSERT BOX WORKFLOW HERE ##
 
 
-
 ```
 
 
@@ -117,11 +116,27 @@ dat <- dat[!duplicated(dat$incident_number),]
 
 ACS geometry of Philadelphia
 
-```{r ACS Data Loading, warning=FALSE, message=FALSE}
+```{r }
 
 census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
 
-acs_vars <- c("B01001_001E")
+#Variables
+acs_variable_list.2020 <- load_variables(2020, #year
+                                         "acs5", #five year ACS estimates
+                                         cache = TRUE)
+
+acs_variable_list.2016 <- load_variables(2016, #year
+                                         "acs5", #five year ACS estimates
+                                         cache = TRUE)
+
+```
+
+```{r ACS Data Loading, warning=FALSE, message=FALSE}
+
+acs_vars <- c("B02001_001E", #Total Population
+              "B02001_002E", #Total Population White Only
+              "B19013_001E" #Median HH Income
+              )
 
 acsTractsPHL.2020 <- get_acs(geography = "tract",
                              year = 2020, 
@@ -130,6 +145,11 @@ acsTractsPHL.2020 <- get_acs(geography = "tract",
                              state = "PA", 
                              county = "Philadelphia", 
                              output = "wide")%>%
+  rename(Total_Pop = B02001_001E,
+         Total_Pop_WhiteOnly = B02001_002E,
+         Med_Income = B19013_001E)%>%
+  mutate(Perc_White = Total_Pop_WhiteOnly/Total_Pop)%>%
+  dplyr::select(-B02001_001M, -B02001_002M, -B19013_001M, -Total_Pop_WhiteOnly)%>%
   st_set_crs("EPSG:4326")
 
 ```
