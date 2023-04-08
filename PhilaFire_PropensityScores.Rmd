@@ -159,9 +159,6 @@ Covariates:
 
 ## INSERT BOX WORKFLOW HERE ##
 
-#Box Upload Philadelphia Structure Fire
-
-
 ```
 
 ### Cleaning
@@ -257,10 +254,6 @@ opa_dat <- opa_dat%>%
   st_as_sf(coords = c("lat", "lng"),
            crs = "EPSG:4326")
 
-opa_hist <- read_csv("../Data/.csv")
-
-
-
 ```
 
 ### Cleaning
@@ -293,6 +286,7 @@ opa_ps$quality_grade_mod <- factor(opa_ps$quality_grade_mod, order = TRUE,
 
 
 ```
+
 ## Neighborhoods
 
 ### Loading In
@@ -338,12 +332,6 @@ opa_sf %>%
   group_by(fire) %>%
   dplyr::select(one_of(opa_sf_cov)) %>%
   summarise_all(funs(mean(., na.rm = T)))
-
-```
-
-```{r}
-
-#with(opa_sf, t.test(total_livable_area ~ fire)) 
 
 ```
 
@@ -405,9 +393,6 @@ mod_match <- matchit(fire ~ total_livable_area + number_of_bedrooms + Price_Sqft
 ```{r}
 
 dta_m <- match.data(mod_match)
-dim(dta_m)
-
-box_write(dta_m, "propMatch_v02.csv")
 
 ```
 
@@ -423,41 +408,6 @@ dta_m %>%
 
 ```
 
-```{r}
-
-dta_m%>%
-  filter(subclass == 14)
-
-dta_m%>%
-  filter(address == "8105 THOURON AVE")
-
-```
-
-## Rest of the tutorial set
-
-```{r}
-# 
-# lapply(ecls_cov, function(v) {
-#     t.test(dta_m[, v] ~ dta_m$catholic)
-# })
-
-```
-
-## Estimating Treatment Effects
-
-```{r}
-
-# with(dta_m, t.test(c5r2mtsc_std ~ catholic))
-
-```
-
-```{r}
-
-# lm_treat1 <- lm(c5r2mtsc_std ~ catholic, data = dta_m)
-# summary(lm_treat1)
-
-```
-
 # Calculating Differences Between Prop-Matched Structures
 
 ## Loading In Data
@@ -465,8 +415,6 @@ dta_m%>%
 ```{r Loading Panel}
 
 panel_opa <- read_csv("../Data/panel_OPA_Fire_OpenData.csv")
-
-g(panel_opa)
 
 ```
 ## Filter Panel By Addresses in Prop-Matched Set
@@ -522,15 +470,6 @@ panel_pm_Results2Y <- panel_pm_4YForward %>%
 
 ```
 
-```{r}
-
-#testing different addresses to verify results
-panel_pm_test <- panel_pm%>% filter(address == "1162 E PASSYUNK AVE")
-dat_pm_test <- dat%>% filter(incident_number == "181230716")
-
-
-
-```
 #Graph Outcome Proximity to Fires
 
 ```{r}
@@ -617,13 +556,5 @@ panel_pm_4YForward%>%
     labs(title = "Prop-Matched Set, No Fires, by Years since Fire") +
     mapTheme()
   
-
-```
-
-
-
-```{r}
-
-panel_opa <- read_csv("../Data/panel_OPA_Fire_OpenData.csv")
 
 ```
