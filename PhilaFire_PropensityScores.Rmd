@@ -488,7 +488,7 @@ panel_pm_4Y%>%
     geom_col(position="dodge", just = 0.5)+
       labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
        subtitle="Philadelphia County, 2013-2018, By Quarter")+
-      geom_smooth(method = "lm", se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
   facet_wrap(~Variable) + 
   xlab("Years Since Fire")+
   ylab("Count of Outcomes")+
@@ -558,3 +558,126 @@ panel_pm_4YForward%>%
   
 
 ```
+```{r Vacancy Clusters of reporting time}
+
+#Filter results between 0 and 1 year, 1.25 and 2 years, 2.25 and 3 years, 3.25 and 4 years
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  mutate(ySinceFire_floor = floor(ySinceFire))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, fire, ySinceFire_floor)%>%
+  gather(Variable, value, -ySinceFire_floor, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=fire), size=0.75)+
+    scale_color_manual(values= c("#3f3128", "#e19825"))+
+    facet_wrap(~Variable + ySinceFire_floor, nrow=3, ncol=5)+
+    labs(title = "Permits in Properties With Fires, by Years After The Fire") +
+    mapTheme()
+
+```
+
+Assuming that permits that happen after a year have been delayed and are not desirable, we can order neighborhoods and points by this value. See below:
+
+```{r Vacancy Clusters of reporting time}
+
+#Divide permits by before 1 and after 1 year
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_permits == 0))%>%
+  mutate(delayed = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_permits, fire, delayed)%>%
+  gather(Variable, value, -delayed, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=fire), size=0.75)+
+    scale_color_manual(values= c("#3f3128", "#20b1ae"))+
+    facet_wrap(~delayed, nrow=1)+
+    labs(title = "Permits in Properties With Fires, by Years After The Fire") +
+    mapTheme()
+
+```
+The map shows some differences.
+
+```{r}
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_permits == 0), fire == 1)%>%
+  mutate(delayed = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_permits, delayed, name)%>%
+  st_drop_geometry()%>%
+  group_by(name) %>%
+  summarize(delayRate = sum(delayed)/sum(n_permits>0), 
+            permits = sum(n_permits))%>%
+  arrange(desc(delayRate))%>%
+  filter(permits > 1)%>%
+  left_join(nhoods, by="name")%>%
+  st_as_sf()%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(fill=delayRate))+
+    scale_fill_viridis_c()+
+    labs(title = "Percentage of properties with permits 1 year after a fire") +
+    mapTheme()
+
+#g(panel_pm_4YForward)
+
+```
+
+Similarly, vacancies that linger after 1 year signal slow recovery. Here are two maps that show the spatial distribution, either by points or summarized by neighborhood.
+
+```{r}
+
+#Divide vacancies by before 1 and after 1 year
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_Vacant == 0))%>%
+  mutate(lingering = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_Vacant, fire, lingering)%>%
+  gather(Variable, value, -lingering, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=fire), size=0.75)+
+    scale_color_manual(values= c("#3f3128", "#20b1ae"))+
+    facet_wrap(~lingering, nrow=1)+
+    labs(title = "Vacancies in Properties With Fires, by Years After The Fire") +
+    mapTheme()
+
+```
+
+
+
+```{r}
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_Vacant == 0), fire == 1)%>%
+  mutate(lingering = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_Vacant, lingering, name)%>%
+  st_drop_geometry()%>%
+  group_by(name) %>%
+  summarize(lingeringRate = sum(lingering)/sum(n_Vacant>0), 
+            vacancies = sum(n_Vacant))%>%
+  arrange(desc(lingeringRate))%>%
+  filter(vacancies > 1)%>%
+  left_join(nhoods, by="name")%>%
+  st_as_sf()%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(fill=lingeringRate))+
+    scale_fill_viridis_c()+
+    labs(title = "Rate of Lingering Vacancies by Neighborhood",
+         subtitle = "Neighborhoods with Vacancies 1 Year After A Fire vs Total Vacancies") +
+    mapTheme()
+
+#g(panel_pm_4YForward)
+
+```
+
