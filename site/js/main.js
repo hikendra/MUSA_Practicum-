@@ -20,16 +20,15 @@ map.on('load', async () => {
 
     map.addSource('vacancies', {
         'type': 'geojson',
-        'data': 'C:/Users/Beeel/Downloads/Neighborhoods_Philadelphia.geojson'
+        'data': './data/phila_vacant_predictions.geojson'
     });
 
     map.addLayer({
             'id': 'predVacancy',
             'source': 'vacancies',
-            'type': 'fill'
+            'type': 'circle'
         },
         'road-label-simple' // Add layer below labels
-
     );
 /*
     map.addLayer(
