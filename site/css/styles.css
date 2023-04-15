@@ -28,3 +28,78 @@ body { margin: 0; padding: 0; }
     margin-right: 5px;
     width: 10px;
 }
+
+.tooltip {
+
+}
+
+.leaflet-control-container { position: absolute; right: 56px } 
+
+h3 {
+    font-family: urw-form,sans-serif;
+    font-weight: 700;
+    font-style: normal;
+    font-size: 1.777em;
+    margin-top: 5px;
+    margin-bottom: 0px;
+    line-height: 1em;
+}
+
+h4 {
+    font-family: urw-form-expanded,sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1.333em;
+    margin-top: 0px;
+    line-height: 0;
+    margin-bottom: 1.3em;
+}
+
+p {
+    font-family: urw-form,sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1em;
+    margin-top: 1.3em;
+}
+
+.leaflet-popup-content p{
+    margin: unset;
+    margin: unset;
+}
+
+.category {
+    margin-top: 1em !important;
+}
+
+.pred-label {
+    font-family: urw-form,sans-serif;
+    font-weight: 700;
+    font-style: normal;
+    font-size: 1.3333em;
+
+}
+
+.pred-num {
+    font-family: urw-form,sans-serif;
+    font-weight: 300;
+    font-style: normal;
+    font-size: 1em;
+    margin-bottom: 1.3em  !important;
+}
+
+.low-v {
+    color: green;
+}
+
+.low-p {
+    color: red;
+}
+
+.high-p {
+    color: green;
+}
+
+.high-v {
+    color: red;
+}

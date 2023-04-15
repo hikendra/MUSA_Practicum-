@@ -1,3 +1,7 @@
+library(sf)
+library(tidyverse)
+
+
 # Reading the opa data
 opa_dat <- read_csv("../Data/OpenDataPhilly-opa_properties_public.csv")
 
@@ -44,4 +48,49 @@ predictions_latlon <- predictions %>%
 glimpse(predictions_latlon)
 
 #Export that field
+write_csv(predictions_latlon, "D:/MUSA/MUSASpring/M8040_Practicum/MUSA_Practicum-/site/data/vacant_predictions_locations.csv")
 
+### FINAL PREDICTONS GEOJSONS > CSV's ###
+
+predVacant <- st_read("../Data/vacant_predictions.geojson")
+predPermit <- st_read("../Data/permit_predictions.geojson")
+predtransfer <- st_read("../Data/transfer_predictions.geojson")
+
+
+predVacant <- predVacant%>%
+  rename(spread1_vacant = level_one,
+         spread2_vacant = level_two,
+         spread3_vacant = level_three,
+         spread4_vacant = level_four,
+         spread5_vacant = level_five)
+
+predPermit <- predPermit%>%
+  rename(spread1_permit = level_one,
+         spread2_permit = level_two,
+         spread3_permit = level_three,
+         spread4_permit = level_four,
+         spread5_permit = level_five)
+
+predtransfer <- predtransfer%>%
+  rename(spread1_transfer = level_one,
+         spread2_transfer = level_two,
+         spread3_transfer = level_three,
+         spread4_transfer = level_four,
+         spread5_transfer = level_five)
+
+predictions_large <- predVacant%>%
+  left_join(st_drop_geometry(predPermit), by="address")%>%
+  left_join(st_drop_geometry(predtransfer), by="address")%>%
+  dplyr::select(-neighborhood.x, -neighborhood.y)%>%
+  mutate(coordinates = geometry)%>%
+  st_drop_geometry()%>%
+  extract(coordinates, c('lat', 'lon'), '\\((.*), (.*)\\)')%>%
+  st_as_sf(coords = c("lat", "lon"),
+           remove=FALSE,
+           crs = "EPSG:4326")
+
+write_csv(predictions_large, "D:/MUSA/MUSASpring/M8040_Practicum/Data/predictions_full.csv")
+
+predictions_large_subset <- sample_n(predictions_large, 100, replace=TRUE)
+
+sample_n()

@@ -1,6 +1,7 @@
 //Imports from other modules
 import { initMap } from "./map.js";
 import { readCSV } from "./inventory.js";
+import { addMarker, createPopup } from "./popup.js";
 
 let app = {
     currentAddress: null,
@@ -8,9 +9,9 @@ let app = {
   };
 
 let map = initMap();
-let predictions = [];
-
 let markers = L.layerGroup().addTo(map);
+
+let predictions = [];
 
 //Load Data
 function onInventoryLoadSuccess(data) {
@@ -21,7 +22,17 @@ function onInventoryLoadSuccess(data) {
 readCSV(onInventoryLoadSuccess);
 
 let addressInput = document.querySelector('#addressInput');
-let searchBtn = document.querySelector('#addressLoadButton')
+let searchBtn = document.querySelector('#addressLoadButton');
+let spreadInput = document.querySelector('#spread-select')
+
+app.currentSpread = spreadInput.value;
+
+//Update the fire spread value whenever the dropdown is changed
+function updateSpread(){
+    app.currentSpread = spreadInput.value;
+    console.log(app.currentSpread);
+}
+
 
 function getAddressData() {
     // search through the data for the input of addressInput,
@@ -30,25 +41,26 @@ function getAddressData() {
     let filteredPredictions = predictions.filter(addr => {
         return addr.address.toUpperCase().includes(text.toUpperCase());
     })
-    console.log(filteredPredictions)
     return filteredPredictions[0];
 }
 
-function addMarker(lnglat){
-    // Add marker to map at search location
-    let marker = new L.marker(lnglat).addTo(markers);
-}
-
 function flyToAddress() {
+    //function that takes in search input and flies to address
+    //creates marker and a tooltip at that location after clearing others
     let location = getAddressData()
-    console.log(location);
     let lnglat = [location.lon, location.lat]
     markers.clearLayers()
-    addMarker(lnglat)
+    addMarker(lnglat, markers)
+    createPopup(location, lnglat, markers)
     map.flyTo(lnglat, 18)
 }
 
+spreadInput.addEventListener("input", updateSpread)
+
 searchBtn.addEventListener("click", flyToAddress);
 
+window.markers = markers;
+window.predictions = predictions;
+window.addressInput = addressInput;
 window.app = app;
 window.map = map;
