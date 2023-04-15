@@ -1,96 +1,54 @@
+//Imports from other modules
+import { initMap } from "./map.js";
+import { readCSV } from "./inventory.js";
 
+let app = {
+    currentAddress: null,
+    currentSpread: null,
+  };
 
-//sk.eyJ1Ijoia2VlbGJuIiwiYSI6ImNsZ2JzM3RnczF1MXgzbG41MGtvaHZmdWUifQ.x06_5V6rM6MuEKg13RIuBw
+let map = initMap();
+let predictions = [];
 
-mapboxgl.accessToken = 'pk.eyJ1Ijoia2VlbGJuIiwiYSI6ImNqaWVseGZjZzA3emMzdnAxM296OTFjNG8ifQ.W2j9Y2mz4t6vGRyKJk_Nyw';
-const map = new mapboxgl.Map({
-    container: 'map',
-    // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
-    style: 'mapbox://styles/mapbox/light-v11',
-    center: [-75.175, 39.973],
-    minZoom: 8,
-    zoom: 11
-});
+let markers = L.layerGroup().addTo(map);
 
-const zoomThreshold = 4;
+//Load Data
+function onInventoryLoadSuccess(data) {
+    predictions = data;
+    console.log(data);
+}
 
-map.on('load', async () => {
-    
-    //const geojson = await getData();
+readCSV(onInventoryLoadSuccess);
 
-    map.addSource('vacancies', {
-        'type': 'geojson',
-        'data': './data/phila_vacant_predictions.geojson'
-    });
+let addressInput = document.querySelector('#addressInput');
+let searchBtn = document.querySelector('#addressLoadButton')
 
-    map.addLayer({
-            'id': 'predVacancy',
-            'source': 'vacancies',
-            'type': 'circle'
-        },
-        'road-label-simple' // Add layer below labels
-    );
-/*
-    map.addLayer(
-        {
-            'id': 'county-population',
-            'source': 'population',
-            'source-layer': 'state_county_population_2014_cen',
-            'minzoom': zoomThreshold,
-            'type': 'fill',
-            // only include features for which the "isCounty"
-            // property is "true"
-            'filter': ['==', 'isCounty', true],
-            'paint': {
-                'fill-color': [
-                    'interpolate',
-                    ['linear'],
-                    ['get', 'population'],
-                    0,
-                    '#F2F12D',
-                    100,
-                    '#EED322',
-                    1000,
-                    '#E6B71E',
-                    5000,
-                    '#DA9C20',
-                    10000,
-                    '#CA8323',
-                    50000,
-                    '#B86B25',
-                    100000,
-                    '#A25626',
-                    500000,
-                    '#8B4225',
-                    1000000,
-                    '#723122'
-                ],
-                'fill-opacity': 0.75
-            }
-        },
-        'road-label-simple' // Add layer below labels
-    );*/
+function getAddressData() {
+    // search through the data for the input of addressInput,
+    // return that array's data
+    const text = addressInput.value;
+    let filteredPredictions = predictions.filter(addr => {
+        return addr.address.toUpperCase().includes(text.toUpperCase());
+    })
+    console.log(filteredPredictions)
+    return filteredPredictions[0];
+}
 
-    /*
-    async function getData(){
+function addMarker(lnglat){
+    // Add marker to map at search location
+    let marker = new L.marker(lnglat).addTo(markers);
+}
 
-        const response = await fetch(
-            'C:/Users/Beeel/Downloads/Neighborhoods_Philadelphia.geojson',
-            { method: 'GET' }
-        )
-        console.log("loading data");
-        return response
-    }*/
-});
+function flyToAddress() {
+    let location = getAddressData()
+    console.log(location);
+    let lnglat = [location.lon, location.lat]
+    markers.clearLayers()
+    addMarker(lnglat)
+    map.flyTo(lnglat, 18)
+}
 
-const stateLegendEl = document.getElementById('state-legend');
-const countyLegendEl = document.getElementById('county-legend');
-map.on('zoom', () => {
-    if (map.getZoom() > zoomThreshold) {
-        stateLegendEl.style.display = 'none';
-        countyLegendEl.style.display = 'block';
-    } else {
-        stateLegendEl.style.display = 'block';
-        countyLegendEl.style.display = 'none';
-    }
-});
+searchBtn.addEventListener("click", flyToAddress);
+
+window.app = app;
+window.map = map;
