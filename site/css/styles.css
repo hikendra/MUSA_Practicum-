@@ -17,6 +17,24 @@ body { margin: 0; padding: 0; }
     z-index: 1;
 }
 
+.search-container {
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+    font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+    padding: 20px;
+    z-index: 1;
+    width: 240px;
+    position:absolute;
+    top: 10px;
+    left: 10px;
+}
+
+#spread-select{
+    margin-bottom:10px;
+    width:240px;
+}
+
 .legend h4 {
     margin: 0 0 10px;
 }
@@ -27,10 +45,6 @@ body { margin: 0; padding: 0; }
     height: 10px;
     margin-right: 5px;
     width: 10px;
-}
-
-.tooltip {
-
 }
 
 .leaflet-control-container { position: absolute; right: 56px } 
@@ -51,7 +65,7 @@ h4 {
     font-style: normal;
     font-size: 1.333em;
     margin-top: 0px;
-    line-height: 0;
+    line-height: 1;
     margin-bottom: 1.3em;
 }
 
@@ -103,3 +117,47 @@ p {
 .high-v {
     color: red;
 }
+
+.control {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    text-align: left;
+    display:flex;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.control-button {
+    display: flex;
+    justify-content: center;
+    appearance: none;
+    background-color: #FAFBFC;
+    border: 1px solid rgba(27, 31, 35, 0.15);
+    border-radius: 6px;
+    box-shadow: rgba(27, 31, 35, 0.04) 0 1px 0, rgba(255, 255, 255, 0.25) 0 1px 0 inset;
+    box-sizing: border-box;
+    color: #24292E;
+    cursor: pointer;
+    list-style: none;
+    padding: 6px 16px;
+    transition: background-color 0.2s cubic-bezier(0.3, 0, 0.5, 1);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    white-space: nowrap;
+    word-wrap: break-word;
+  }
+  
+
+
+  .control-button:hover {
+    background-color: #F3F4F6;
+    text-decoration: none;
+    transition-duration: 0.1s;
+  }
+  
+  .control-button:active {
+    background-color: #EDEFF2;
+    box-shadow: rgba(225, 228, 232, 0.2) 0 1px 0 inset;
+    transition: none 0s;
+  }

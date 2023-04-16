@@ -1,0 +1,39 @@
+[debug] [2023-04-16T04:35:03.387Z] ----------------------------------------------------------------------
+[debug] [2023-04-16T04:35:03.389Z] Command:       D:\node.exe C:\Users\Beeel\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init
+[debug] [2023-04-16T04:35:03.390Z] CLI Version:   11.27.0
+[debug] [2023-04-16T04:35:03.390Z] Platform:      win32
+[debug] [2023-04-16T04:35:03.390Z] Node Version:  v16.14.2
+[debug] [2023-04-16T04:35:03.391Z] Time:          Sun Apr 16 2023 00:35:03 GMT-0400 (Eastern Daylight Time)
+[debug] [2023-04-16T04:35:03.392Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2023-04-16T04:35:03.401Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2023-04-16T04:35:03.402Z] > authorizing via signed-in user (bennkeel@gmail.com)
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  D:\MUSA\MUSASpring\M8040_Practicum\MUSA_Practicum-\site
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] but for now we'll just set up a default project.
+[info] 
+[info] i  If you want to create a project in a Google Cloud organization or folder, please use "firebase projects:create" instead, and return to this command when you've created the project. 
+[debug] [2023-04-16T04:37:53.559Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects [none]
+[debug] [2023-04-16T04:37:53.559Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects {"projectId":"Philadelphia Fire Recovery App","name":"Philadelphia Fire Recovery App"}
+[debug] [2023-04-16T04:37:53.824Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects 400
+[debug] [2023-04-16T04:37:53.824Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects {"error":{"code":400,"message":"field [project_id] has issue [project_id contains invalid characters]","status":"INVALID_ARGUMENT","details":[{"@type":"type.googleapis.com/google.rpc.BadRequest","fieldViolations":[{"field":"project_id","description":"project_id contains invalid characters"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"url":"https://cloud.google.com/resource-manager/reference/rest/v1/projects"}]}]}}
+[debug] [2023-04-16T04:37:53.892Z] FirebaseError: HTTP Error: 400, field [project_id] has issue [project_id contains invalid characters]
+    at responseToError (C:\Users\Beeel\AppData\Roaming\npm\node_modules\firebase-tools\lib\responseToError.js:49:12)
+    at RetryOperation._fn (C:\Users\Beeel\AppData\Roaming\npm\node_modules\firebase-tools\lib\apiv2.js:288:77)
+    at processTicksAndRejections (node:internal/process/task_queues:96:5)
+[error] 
+[error] Error: Failed to create project. See firebase-debug.log for more info.

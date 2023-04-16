@@ -10,7 +10,6 @@ let app = {
 
 let map = initMap();
 let markers = L.layerGroup().addTo(map);
-
 let predictions = [];
 
 //Load Data
@@ -32,7 +31,6 @@ function updateSpread(){
     app.currentSpread = spreadInput.value;
     console.log(app.currentSpread);
 }
-
 
 function getAddressData() {
     // search through the data for the input of addressInput,

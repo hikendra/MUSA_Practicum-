@@ -67,10 +67,12 @@ function labelPrediction(info, outcome) {
 }    
 
 function createPopup(info, lnglat, markerLayer){
+    let spread = document.getElementById("spread-select").value;
+
     L.popup(lnglat, {
         content: `<h3>${info.address}</h3><br>
                     <h4>in ${info.neighborhood}</h4>
-                    <p>Within two years, this property has a:</p>
+                    <p>If a fire of severity level ${spread} happens here, <br>then within two years, the property has a:</p>
                     <p class="category"> 
                     <span class="pred-label ${labelPrediction(info, "permit")}-p"">${labelPrediction(info, "permit")}</span>
                     chance of major repairs</p>
@@ -83,7 +85,7 @@ function createPopup(info, lnglat, markerLayer){
                     <span class="pred-label ${labelPrediction(info, "vacant")}-v">${labelPrediction(info, "vacant")}</span>
                     chance of being left vacant.</p>
                     <p class="pred-num">${getPrediction(info, "vacant") * 100} %</p>
-                    <button type="button" id="popupClose" class="popup-close">Close & Zoom Out</button>`,
+                    <button type="button" id="popupClose" class="popup-close control-button">Close & Zoom Out</button>`,
         offset: L.point(0, -50),
         className: 'tooltip',
         closeButton: false})

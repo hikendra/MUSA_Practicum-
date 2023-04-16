@@ -16,27 +16,36 @@
 
     <div id="map"></div>
 
-    <div class="search-container">
-        <div class="input-group">
-            <input id="addressInput" type="text" class="adress-input" placeholder="Enter An Address">
-            <span class="input-btn">
-                <button class="btn btn-default" id="addressLoadButton" type="button">Search</button>
-            </span>
-        </div>
-        <div class="lists-group" >
-            <div id="addressSearchList" class="list-group"></div>
-        </div>
+    <div class="search-container" id="searchContainer">
+        <h4 id>Search fire recovery predictions:</h4>
+        <div class="control">
+            <div class="input-group">
+                <label for="addressInput">Enter An Address:</label>
+                <div>
+                    <input id="addressInput" type="text" class="address-input" placeholder="Enter An Address" size=35>
+                </div>
+            </div>
+            <div class="lists-group" >
+                <div id="addressSearchList" class="list-group"></div>
+            </div>
+        </div>  
         
-        <label for="spread-select">Select Fire Spread:</label>
-
-        <select name="spread" id="spread-select">
-            <!--<option value="">--Please choose an option--</option>-->
-            <option value="1">Object of Origin Only</option>
-            <option value="2">Spread to Room</option>
-            <option value="3">Spread to Floor</option>
-            <option value="4">Spread to Multiple Floors</option>
-            <option value="5">Spread to Other Buildings</option>
-        </select>
+        <div class="control">
+            <label for="spread-select">Select Fire Spread:</label>
+            <div class="dropdown">
+                <select name="spread" id="spread-select">
+                    <!--<option value="">--Please choose an option--</option>-->
+                    <option value="1">1 - Object of Origin Only</option>
+                    <option value="2">2 - Spread to Room</option>
+                    <option value="3">3 - Spread to Floor</option>
+                    <option value="4">4 - Spread to Multiple Floors</option>
+                    <option value="5">5 - Spread to Other Buildings</option>
+                </select>
+            </div>
+        </div>
+        <div class="control">
+            <button class="control-button" id="addressLoadButton" type="button">Search</button>
+        </div>
     </div>
 
 
