@@ -1,8 +1,11 @@
-//loading just one csv
-//Future versions will have to pick up more of the data, or 
-//  take in a parameter for what we want to load, based on nhood or severity
+//./data/predictions_full_subset.csv
+//https://storage.cloud.google.com/phila-fire-prediction-data/predictions_full_round.csv
+
+const myHeaders = new Headers();
+myHeaders.append('Access-Control-Allow-Origin', '*');
+
 function readCSV(onSuccess, onFailure) {
-    fetch('./data/predictions_full_subset.csv')
+    fetch('./data/predictions_full_subset.csv', { myHeaders })
     .then(resp => {
         if (resp.status === 200){
             return resp.text();
