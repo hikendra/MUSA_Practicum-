@@ -1,21 +1,22 @@
 //Imports from other modules
 import { initMap } from "./map.js";
-import { readCSV } from "./inventory.js";
+import { readCSV, readNHoodCSV } from "./inventory.js";
 import { addMarker, createPopup } from "./popup.js";
 
 let app = {
     currentAddress: null,
-    currentSpread: null,
+    currentSpread: 1,
   };
 
 let map = initMap();
 let markers = L.layerGroup().addTo(map);
-let predictions = [];
+let key = [];
+let currentAddressData = [];
 
 //Load Data
 function onInventoryLoadSuccess(data) {
-    predictions = data;
-    console.log(data);
+    key = data;
+    console.log(key);
 }
 
 readCSV(onInventoryLoadSuccess);
@@ -32,20 +33,37 @@ function updateSpread(){
     console.log(app.currentSpread);
 }
 
-function getAddressData() {
+function getSingleAddress(data){
+    const text = addressInput.value;
+    console.log(data);
+    let singleAddress = data.filter(location => {
+        return location.address.toUpperCase().includes(text.toUpperCase());
+    })
+    console.log(singleAddress);
+    flyToAddress(singleAddress[0]);
+}
+
+async function getAddressData() {
     // search through the data for the input of addressInput,
     // return that array's data
     const text = addressInput.value;
-    let filteredPredictions = predictions.filter(addr => {
+    let nhoodKey = key.filter(addr => {
         return addr.address.toUpperCase().includes(text.toUpperCase());
     })
-    return filteredPredictions[0];
+    console.log(nhoodKey);
+    //Check for length, if greater than 0, return a warning that says "please refine your search"
+    //If length is 0, then say "No Address Found"
+    if (nhoodKey.length == 1) {
+        //Get address's neighborhood from key csv
+        //load csv by that address
+        currentAddressData = readNHoodCSV(nhoodKey[0].neighborhood, getSingleAddress);
+        //filter to just that address
+    } 
 }
 
-function flyToAddress() {
+function flyToAddress(location) {
     //function that takes in search input and flies to address
     //creates marker and a tooltip at that location after clearing others
-    let location = getAddressData()
     let lnglat = [location.lon, location.lat]
     markers.clearLayers()
     addMarker(lnglat, markers)
@@ -54,8 +72,7 @@ function flyToAddress() {
 }
 
 spreadInput.addEventListener("input", updateSpread)
-
-searchBtn.addEventListener("click", flyToAddress);
+searchBtn.addEventListener("click", getAddressData);
 
 window.markers = markers;
 window.predictions = predictions;

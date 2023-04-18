@@ -30,7 +30,7 @@ function addMarker(lnglat, markerLayer){
 
 function getPrediction(info, outcome){
     //get type of variable from info
-    let column = `spread${app.currentSpread}_${outcome}`
+    let column = `spread${document.getElementById("spread-select").value}_${outcome}`
     let prediction = info[column];
     return prediction;
 }
