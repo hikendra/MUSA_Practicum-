@@ -2,7 +2,7 @@
 //https://storage.cloud.google.com/phila-fire-prediction-data/predictions_full_round.csv
 
 function readCSV(onSuccess, onFailure) {
-    fetch('./data/predictionsByNhood/_Address-Neighborhood-Key.csv')
+    fetch('./data/predictionsByNhood/Address-Neighborhood-Key.csv')
     .then(resp => {
         if (resp.status === 200){
             return resp.text();
