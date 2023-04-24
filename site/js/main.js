@@ -75,7 +75,7 @@ spreadInput.addEventListener("input", updateSpread)
 searchBtn.addEventListener("click", getAddressData);
 
 window.markers = markers;
-window.predictions = predictions;
+window.key = key;
 window.addressInput = addressInput;
 window.app = app;
 window.map = map;
