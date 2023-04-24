@@ -2,7 +2,7 @@
 //https://storage.cloud.google.com/phila-fire-prediction-data/predictions_full_round.csv
 
 function readCSV(onSuccess, onFailure) {
-    fetch('./data/predictionsByNhood/_Address-Neighborhood-Key.csv')
+    fetch('https://github.com/hikendra/MUSA_Practicum-/tree/main/site/data/predictionsByNhood/_Address-Neighborhood-Key.csv')
     .then(resp => {
         if (resp.status === 200){
             return resp.text();
@@ -19,7 +19,7 @@ function readCSV(onSuccess, onFailure) {
 }
 
 function readNHoodCSV(nhood, onSuccess, onFailure) {
-    fetch(`./data/predictionsByNhood/${nhood}.csv`)
+    fetch(`https://github.com/hikendra/MUSA_Practicum-/tree/main/site/data/predictionsByNhood/${nhood}.csv`)
     .then(resp => {
         if (resp.status === 200){
             return resp.text();
