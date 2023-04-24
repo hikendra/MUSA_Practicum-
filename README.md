@@ -2,4 +2,4 @@
 
 Team Members: Kendra Hills, Myron Bañez, Ben Keel
 
-Current tasks: Researching data sources to pair with base data set.
+Link to site: https://hikendra.github.io/MUSA_Practicum-/site/index.html
