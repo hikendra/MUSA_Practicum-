@@ -72,16 +72,20 @@ predPermit <- predPermit%>%
          spread5_permit = level_five)
 
 predtransfer <- predtransfer%>%
-  rename(spread1_transfer = level_one,
-         spread2_transfer = level_two,
-         spread3_transfer = level_three,
-         spread4_transfer = level_four,
-         spread5_transfer = level_five)
+  rename(spread1_permit = level_one,
+         spread2_permit = level_two,
+         spread3_permit = level_three,
+         spread4_permit = level_four,
+         spread5_permit = level_five)
+
+predtransfer <- predtransfer%>%
+  dplyr::select(-neighborhood)
 
 predictions_large <- predVacant%>%
   left_join(st_drop_geometry(predPermit), by="address")%>%
   left_join(st_drop_geometry(predtransfer), by="address")%>%
-  dplyr::select(-neighborhood.x, -neighborhood.y)%>%
+  dplyr::select(-neighborhood.x)%>%
+  rename(neighborhood = neighborhood.y)%>%
   mutate(coordinates = geometry)%>%
   st_drop_geometry()%>%
   extract(coordinates, c('lat', 'lon'), '\\((.*), (.*)\\)')%>%
@@ -93,4 +97,23 @@ write_csv(predictions_large, "D:/MUSA/MUSASpring/M8040_Practicum/Data/prediction
 
 predictions_large_subset <- sample_n(predictions_large, 100, replace=TRUE)
 
-sample_n()
+predictions_large_round <- predictions_large%>%
+  st_drop_geometry()%>%
+  dplyr::select(-address, -neighborhood, -lat, -lon)%>%
+  round(., 2)%>%
+  cbind(dplyr::select(predictions_large, address, neighborhood, lat, lon))
+
+nhoodsKey <- read_csv("C:/Users/Beeel/Documents/practicumC/M8040_Practicum/MUSA_Practicum-/site/data/predictionsByNhood/Address-Neighborhood-Key.csv")
+
+nhoods <- nhoodsKey%>%
+  dplyr::select(neighborhood)
+
+sum(unique(nhoods$neighborhood))
+
+nhoods <- unique(predictions_large_round$neighborhood)
+
+for (i in 1:154) {
+  write_csv(filter(predictions_large_round, neighborhood == nhoods[i]), paste0('C:/Users/Beeel/Documents/practicumC/M8040_Practicum/Data/predictionsByNHood/', nhoods[i], ".csv"))
+}
+  
+
