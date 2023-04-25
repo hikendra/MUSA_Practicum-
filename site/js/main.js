@@ -61,6 +61,16 @@ async function getAddressData() {
     } 
 }
 
+function flyToWithOffset(map, latlng, zoom) {
+    const height = map.getSize().y;
+    let offset = map.project(latlng).subtract([0, height/2 - 300])
+    console.log (map.getZoom())
+    if (map.getZoom() < 12) {
+        offset = map.project(latlng).subtract([0, 2]);
+    }   
+    map.flyTo(map.unproject(offset), zoom);
+}
+
 function flyToAddress(location) {
     //function that takes in search input and flies to address
     //creates marker and a tooltip at that location after clearing others
@@ -68,7 +78,7 @@ function flyToAddress(location) {
     markers.clearLayers()
     addMarker(lnglat, markers)
     createPopup(location, lnglat, markers)
-    map.flyTo(lnglat, 18)
+    flyToWithOffset(map, lnglat, 18)
 }
 
 spreadInput.addEventListener("input", updateSpread)

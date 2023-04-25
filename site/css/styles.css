@@ -83,66 +83,6 @@ a :hover {
     color: #fff;
 }
 
-#spread-select{
-    margin-bottom:10px;
-    width:240px;
-}
-
-.legend h4 {
-    margin: 0 0 10px;
-}
-
-.legend div span {
-    border-radius: 50%;
-    display: inline-block;
-    height: 10px;
-    margin-right: 5px;
-    width: 10px;
-}
-
-.leaflet-control-container { position: absolute; right: 56px } 
-
-.leaflet-popup-content p{
-    margin: unset;
-    margin: unset;
-}
-
-.category {
-    margin-top: 1em !important;
-}
-
-.pred-label {
-    font-family: urw-form,sans-serif;
-    font-weight: 700;
-    font-style: normal;
-    font-size: 1.3333em;
-
-}
-
-.pred-num {
-    font-family: urw-form,sans-serif;
-    font-weight: 300;
-    font-style: normal;
-    font-size: 1em;
-    margin-bottom: 1.3em  !important;
-}
-
-.low-v {
-    color: green;
-}
-
-.low-p {
-    color: red;
-}
-
-.high-p {
-    color: green;
-}
-
-.high-v {
-    color: red;
-}
-
 #scrollyBG {
     width: 100%;
     display: flex;
@@ -199,8 +139,7 @@ figure p {
 .step {
     margin: 2rem auto 2rem auto;
     padding: 0 1rem;
-    background-color:white;
-    color: black;
+    color: white;
     display:flex;
     flex-direction: column;
     justify-content: center;
@@ -209,6 +148,8 @@ figure p {
 
 .step-title {
     background-color: transparent;
+    margin: 200px 0;
+    color:black;
 }
 
 .step h2 {

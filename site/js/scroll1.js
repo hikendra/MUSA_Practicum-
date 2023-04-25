@@ -28,14 +28,11 @@ function handleResize() {
 }
 
 function displayImage(url) {
+    figure.select("#scrollImg")
+    .attr('src', url);
+    
     figure.select("#scrollImgCrop")
         .style('display', 'block')
-
-    figure.select("#scrollImg")
-       .attr('src', url);
-
-
-    console.log(url);
 
     figure.select("#blockQuote")
         .style('display', 'none');
@@ -84,6 +81,7 @@ function handleStepEnter(response) {
     6. Image (Taney neighbor 2019)
     7. Quote
     8. Image (Taney Current (from zillow))
+    9. Image (Taney Neighbor (from zillow))
     9. Quote ()
     */ 
 
@@ -111,7 +109,7 @@ function handleStepEnter(response) {
 
     } else if (response.index == 4) {
         //Vacancy # 4
-        let quote = "This is a block quote";
+        let quote = "“Never get a landlord that lives in New York”";
         displayQuote(quote);
         changeBackground('#3A352F');
 
@@ -127,7 +125,7 @@ function handleStepEnter(response) {
 
     }   else if (response.index == 7) {
         //Sales #3
-        let quote = "This is a block quote";
+        let quote = "“Biggest issue that we come across is that [owners] dont have homeowner insurance”";
         displayQuote(quote);
         changeBackground('#1B3350');
 
@@ -139,6 +137,11 @@ function handleStepEnter(response) {
     }   else if (response.index == 9) {
         //Permits #2
         displayImage(caseStudyImgUrl[7]);
+        changeBackground('#2D4A2A');
+    }  else if (response.index == 10) {
+        //Permits #3
+        let quote = "“Fires occur in the places where they are waiting to happen”";
+        displayQuote(quote);
         changeBackground('#2D4A2A');
     }  
 }
