@@ -158,6 +158,15 @@ Covariates:
 ```{r Box Set Up, message=FALSE, warning=FALSE}
 
 ## INSERT BOX WORKFLOW HERE ##
+box_auth(client_id = "7olfapklfw3aflgpeb2kopxj1jceogg0", 
+         client_secret = "xMUYd0SngtrtzGC92cZKon2jd6yyvM9d")
+
+box_setwd(186732420366)
+
+structureFire <- box_read_excel(1093000179542)
+
+g(structureFire)
+
 
 ```
 
@@ -221,7 +230,9 @@ acs_variable_list.2016 <- load_variables(2016, #year
 
 acs_vars <- c("B02001_001E", #Total Population
               "B02001_002E", #Total Population White Only
-              "B19013_001E" #Median HH Income
+              "B19013_001E", #Median HH Income
+              "B25002_001E", #Total Units
+              "B25002_003E" #Total Vacant Units
               )
 
 acsTractsPHL.2020 <- get_acs(geography = "tract",
@@ -233,8 +244,11 @@ acsTractsPHL.2020 <- get_acs(geography = "tract",
                              output = "wide")%>%
   rename(Total_Pop = B02001_001E,
          Total_Pop_WhiteOnly = B02001_002E,
-         Med_Income = B19013_001E)%>%
-  mutate(Perc_White = Total_Pop_WhiteOnly/Total_Pop)%>%
+         Med_Income = B19013_001E,
+         Total_Vacant = B25002_003E,
+         Total_Units = B25002_001E)%>%
+  mutate(Perc_White = Total_Pop_WhiteOnly/Total_Pop,
+         Perc_Vacant = Total_Vacant*100/Total_Units)%>%
   dplyr::select(-B02001_001M, -B02001_002M, -B19013_001M, -Total_Pop_WhiteOnly)%>%
   st_set_crs("EPSG:4326")
 
@@ -638,21 +652,20 @@ Similarly, vacancies that linger after 1 year signal slow recovery. Here are two
 panel_pm_4YForward%>%
   filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
   filter(!(n_Vacant == 0))%>%
-  mutate(lingering = ifelse(ySinceFire <= 1, 0, 1))%>%
+  mutate(lingering = ifelse(ySinceFire <= 1.5, 0, 1))%>%
   dplyr::select(n_Vacant, fire, lingering)%>%
   gather(Variable, value, -lingering, -fire, -geometry)%>%
   filter(value > 0)%>%
   ggplot()+
-    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
-    geom_sf(aes(color=fire), size=0.75)+
-    scale_color_manual(values= c("#3f3128", "#20b1ae"))+
+    geom_sf(data=acsTractsPHL.2020, aes(fill=q5(Perc_Vacant)), color=NA)+
+        scale_fill_manual(values=palette5_vac, labels=qBr(acsTractsPHL.2020, "Perc_Vacant"))+
+    geom_sf(aes(color=fire), size=1)+
+    scale_color_manual(values= c("#20B1AE", "#D55816"))+
     facet_wrap(~lingering, nrow=1)+
     labs(title = "Vacancies in Properties With Fires, by Years After The Fire") +
     mapTheme()
 
 ```
-
-
 
 ```{r}
 
@@ -680,4 +693,135 @@ panel_pm_4YForward%>%
 #g(panel_pm_4YForward)
 
 ```
+
+## Are investors buying fire-stricken properties at a higher rate than normal properties?
+
+```{r}
+
+transfers <- read_csv("../Data/OpenDataPhilly-transfers.csv")
+
+#Select relevant fields and filter to fire data range
+transfers_data <- transfers%>%
+  dplyr:: select(objectid, recording_date, street_address, document_type, grantors, grantees)%>%
+  filter(year(recording_date) > 2008,
+         !is.na(street_address))%>%
+  rename(address = street_address)%>%
+  mutate(quarter = as_date(floor_date(recording_date, unit="quarter")))
+
+```
+
+```{r}
+
+toMatch <- c('LLC', 'LP', 'REO', 'Investments', 'Homes', 'Trust', 'Corp', 'Inc')
+
+investors <- unique(grep(paste(toMatch,collapse="|"), 
+                        transfers_data$grantees, value=TRUE))
+
+#Check for owners with 5+ properties
+investors_opa <- opa_dat%>%
+  st_drop_geometry()%>%
+  dplyr::select(owner_1)%>%
+  group_by(owner_1)%>%
+  filter(n()>1 & n()<100)
+
+investors_list_opa <- unique(investors_opa)
+
+transfers_data <- transfers_data%>%
+  mutate(investorBuy = ifelse(grantees %in% investors | grantees %in% investors_list_opa, TRUE, FALSE),
+         investorSell = ifelse(grantors %in% investors | grantors %in% investors_list_opa, TRUE, FALSE))%>%
+  mutate(homeownerToInvestor = ifelse(investorBuy == TRUE & investorSell== FALSE, TRUE, FALSE),
+         investorToHomeowner = ifelse(investorSell == TRUE & investorBuy== FALSE, TRUE, FALSE))
+
+#join transfers data to property by address and quarter
+
+panel_pm_4Y_sales <- panel_pm_4Y%>%
+  rename(quarter = quarter.x)%>%
+  left_join(dplyr::select(transfers_data, address, quarter, homeownerToInvestor, investorToHomeowner), by=c("address", "quarter"))
+
+
+```
+
+
+### Homeowner to investor, investor to homeowner
+
+```{r}
+
+
+panel_pm_4Y_sales%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_transfers == 0))%>%
+  dplyr::select(ySinceFire, fire, investorToHomeowner)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value == TRUE)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+panel_pm_4Y_sales%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_transfers == 0))%>%
+  dplyr::select(ySinceFire, fire, investorToHomeowner)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value == TRUE)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+```
+
+```{r}
+
+panel_pm_4Y_sales%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_transfers == 0))%>%
+  dplyr::select(ySinceFire, fire, investorBuy)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value == TRUE)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+
+```
+
+
 

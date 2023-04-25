@@ -101,7 +101,8 @@ predictions_large_round <- predictions_large%>%
   st_drop_geometry()%>%
   dplyr::select(-address, -neighborhood, -lat, -lon)%>%
   round(., 2)%>%
-  cbind(dplyr::select(predictions_large, address, neighborhood, lat, lon))
+  cbind(dplyr::select(predictions_large, address, neighborhood, lat, lon))%>%
+  dplyr::select(address, everything())
 
 nhoodsKey <- read_csv("C:/Users/Beeel/Documents/practicumC/M8040_Practicum/MUSA_Practicum-/site/data/predictionsByNhood/Address-Neighborhood-Key.csv")
 
@@ -116,4 +117,5 @@ for (i in 1:154) {
   write_csv(filter(predictions_large_round, neighborhood == nhoods[i]), paste0('C:/Users/Beeel/Documents/practicumC/M8040_Practicum/Data/predictionsByNHood/', nhoods[i], ".csv"))
 }
   
+#####
 

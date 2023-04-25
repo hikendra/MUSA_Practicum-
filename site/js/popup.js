@@ -21,10 +21,10 @@ let high = "high";
 //Interpretive descriptions for each combination of outcome
 const descriptionArray = {
     //order is vacancy, sale, repair
-    "low-low-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "low-low-mid": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
+    "low-low-low": "This property likely won't have reported outcomes from the fire, probably due to the low severity of the emergency.",
+    "low-low-mid": "This property may be repaired by the owner with little intervention.",
     "low-low-high": "This property will likely be repaired by the owner and will recover with little intervention.",
-    "low-mid-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
+    "low-mid-low": "This property has a slightly elevated risk of being sold because of the fire. If the fire was small enough, the property may be repaired without a permit.",
     "low-mid-mid": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
     "low-mid-high": "This property will recover quickly, but may be sold to an investor rather than be kept by the owner. This sale could happen before or after repairs depending on the nature of the fire and the insurance of the individual.",
     "low-high-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
