@@ -1,0 +1,4 @@
+address,spread1_vacant,spread2_vacant,spread3_vacant,spread4_vacant,spread5_vacant,spread1_permit,spread2_permit,spread3_permit,spread4_permit,spread5_permit,spread1_transfer,spread2_transfer,spread3_transfer,spread4_transfer,spread5_transfer,neighborhood,lat,lon,geometry
+6100 EASTWICK AVE,0.02,0.03,0.04,0.06,0.1,0.15,0.21,0.28,0.37,0.48,0.29,0.32,0.36,0.39,0.43,Industrial,-75.220624060679,39.9222449975822,"c(-75.220624060679, 39.9222449975822)"
+6250 EASTWICK AVE,0.01,0.02,0.03,0.05,0.07,0.14,0.2,0.28,0.37,0.48,0.29,0.32,0.36,0.39,0.43,Industrial,-75.2220303143062,39.9201722751925,"c(-75.2220303143062, 39.9201722751925)"
+6200 EASTWICK AVE,0.01,0.02,0.04,0.06,0.08,0.15,0.21,0.28,0.38,0.48,0.29,0.32,0.36,0.39,0.43,Industrial,-75.2214270080101,39.9210576187455,"c(-75.2214270080101, 39.9210576187455)"

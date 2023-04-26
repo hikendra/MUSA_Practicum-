@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fire Recovery Predictions</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI="
+crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM="
+crossorigin=""></script>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+
+
+<div id="map"></div>
+
+<div class="list-container">
+    <div class="input-group">
+        <input id="voterFileInput" type="text" class="form-control" placeholder="Enter A List">
+        <span class="input-group-btn">
+            <button class="btn btn-default" id="voterFileLoadButton" type="button">Load List</button>
+        </span>
+    </div>
+    <div class="lists-group" >
+        <div id="voterList" class="list-group"></div>
+    </div>
+</div>
+
+<div id="state-legend" class="legend">
+    <h4>Population</h4>
+    <div><span style="background-color: #723122"></span>25,000,000</div>
+    <div><span style="background-color: #8b4225"></span>10,000,000</div>
+    <div><span style="background-color: #a25626"></span>7,500,000</div>
+    <div><span style="background-color: #b86b25"></span>5,000,000</div>
+    <div><span style="background-color: #ca8323"></span>2,500,000</div>
+    <div><span style="background-color: #da9c20"></span>1,000,000</div>
+    <div><span style="background-color: #e6b71e"></span>750,000</div>
+    <div><span style="background-color: #eed322"></span>500,000</div>
+    <div><span style="background-color: #f2f12d"></span>0</div>
+</div>
+
+<div id="county-legend" class="legend" style="display: none">
+    <h4>Population</h4>
+    <div><span style="background-color: #723122"></span>1,000,000</div>
+    <div><span style="background-color: #8b4225"></span>500,000</div>
+    <div><span style="background-color: #a25626"></span>100,000</div>
+    <div><span style="background-color: #b86b25"></span>50,000</div>
+    <div><span style="background-color: #ca8323"></span>10,000</div>
+    <div><span style="background-color: #da9c20"></span>5,000</div>
+    <div><span style="background-color: #e6b71e"></span>1,000</div>
+    <div><span style="background-color: #eed322"></span>100</div>
+    <div><span style="background-color: #f2f12d"></span>0</div>
+</div>
+    
+    <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
+    <script type="module" src="js/main.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Fire Recovery Predictions</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI="
+    crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+    integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM="
+    crossorigin=""></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Calistoga&family=Knewave&family=Lato:wght@400;700;900&family=Signika+Negative:wght@300;400;600&family=Spectral:ital,wght@0,300;0,400;0,600;1,400&family=Work+Sans:wght@300;400;500&display=swap" rel="stylesheet"> 
+    <link rel="stylesheet" href="https://use.typekit.net/cvt0tey.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/app-styles.css">
+    <link rel="stylesheet" href="css/type-styles.css">
+
+</head>
+<body>
+    <div class = "navigation">
+        <div id="navHome" class="nav-item">
+            <a href="index.html">Home</a>
+        </div>
+        <div class="nav-item">
+            <a href="index.html#scrolly">Case Study</a>
+        </div>
+        <div class="nav-item">
+            <a href="index.html#recommendations">Recommendations</a>
+        </div>
+        <div class="nav-item">
+            <a href="search.html">Forecast</a>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+
+    <div class="search-container" id="searchContainer">
+        <h4 class="control-title">Recovery Forecast</h4>
+        <p class="">Search any single address below to see the recovery forecast, and adjust the forecast by fire severity.</p>
+        <div class="control">
+            <div class="input-group">
+                <label for="addressInput">Enter An Address:</label>
+                <div>
+                    <input id="addressInput" type="text" class="address-input" placeholder="Enter An Address" size=35>
+                </div>
+            </div>
+            <div class="lists-group" >
+                <div id="addressSearchList" class="list-group"></div>
+            </div>
+        </div>  
+        
+        <div class="control">
+            <label for="spread-select">Select Fire Spread:</label>
+            <div class="dropdown">
+                <select name="spread" id="spread-select">
+                    <!--<option value="">--Please choose an option--</option>-->
+                    <option value="1">1 - Object of Origin Only</option>
+                    <option value="2">2 - Spread to Room</option>
+                    <option value="3">3 - Spread to Floor</option>
+                    <option value="4">4 - Spread to Multiple Floors</option>
+                    <option value="5">5 - Spread to Other Buildings</option>
+                </select>
+            </div>
+        </div>
+        <div class="control">
+            <button class="control-button" id="addressLoadButton" type="button">Search</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
+    <script type="module" src="js/main.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,130 @@
+/*fonts use a 1.3333 multiplier for text sizes*/
+
+
+/* Aboreto, Calistoga, Knewave, Spectral */
+.display {
+    font-family: 'Spectral', serif;
+    font-size: 5.6em;
+    font-style: italic;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    line-height: 1.3em;
+    text-align: center;
+}
+
+/* Lato, Signika Negative, Rajdhani*/
+
+h1 {
+    font-family: 'Spectral', serif;
+    font-weight: 400;
+    font-size: 5.6em;
+    margin-top: 0px;
+    margin-bottom: 0.25em;
+    line-height: 1em;
+}
+
+h2 {
+    font-family: 'Spectral', serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 4.2em;
+    margin-top: 0px;
+    line-height: 1em;
+}
+
+h3 {
+    font-family: 'Spectral', serif;    
+    font-weight: 400;
+    font-style: normal;
+    font-size: 3.2em;
+    margin-top: 5px;
+    margin-bottom: 0px;
+    line-height: 1em;
+}
+
+h4 {
+    font-family: 'Spectral', serif;    
+    font-weight: 400;
+    font-style: normal;
+    font-size: 2.4em;
+    margin-top: 0px;
+    line-height: 1;
+    margin-bottom: 1.3em;
+}
+
+h5 {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 500;
+    font-style: normal;
+    font-size: 1.8em;
+    margin-top: 0;
+}
+
+h6 {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1.3em;
+    margin-top: 1.3em;
+    margin-bottom: 0em;
+}
+
+p {
+    font-family: 'Spectral', serif; 
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1.3em;
+}
+
+.CTA {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 500;
+    font-style: normal;
+    font-size: 1.3em;
+    margin-top: 1.3em;
+}
+
+.body-text {
+    font-family: 'Lato', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1em;
+    margin-top: 1.3em;
+}
+
+.eyebrow {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 500;
+    font-style: normal;
+    font-size: 1.3em;
+    margin-top: 0;    
+    font-style: normal;
+    font-size: 0.75em;
+    margin-top: 1.3em;
+    letter-spacing: 1px;
+}
+
+a {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 500;
+    font-style: normal;
+    font-size: 1em;
+    margin-top: 0;
+}
+
+ul {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1em;
+    margin-top: 1.8em;
+}
+
+li {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1em;
+    margin-top: 0;
+    margin-bottom: 0.5em;
+}

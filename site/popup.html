@@ -1,0 +1,46 @@
+<!--This document is purely for formatting reference and is not referred to in the code for creating the leaflet popup.-->
+
+<div class="content-container">
+    <div>
+        <h4>${info.address}</h4><br>
+        <h5>in ${info.neighborhood}</h5>
+        <p>If a fire of severity level ${spread} happens here, <br>then within two years, the property has a:</p>
+    </div>
+    <div class="indicator-container">
+        <div class="category"> 
+            <p class="note">Repairs</p>
+            <span class="pred-label">${labelPrediction(info, "permit")}</span>
+        </div>
+        <div class="category">
+            <p class="note">Sale</p>
+            <span class="pred-label">${labelPrediction(info, "transfer")}</span>
+        </div>
+        <div class="category">
+            <p class="note">Vacancy</p>
+            <span class="pred-label">${labelPrediction(info, "vacant")}</span>
+        </div>
+    </div>
+    <div>
+        <p id="interpretiveDescr" class="">Description</p>
+        <p id="footer note">Read our <a href="index.html#scrolly">Case Study</a> and <a href="index.html#recommendations">Recommendations</a> to learn more about these different outcomes and interventions.</p>
+    </div>
+    <button type="button" id="popupClose" class="popup-close control-button">Close & Zoom Out</button>
+</div>
+
+
+<!-- old -->
+`<h4>${info.address}</h4><br>
+<h5>in ${info.neighborhood}</h5>
+<p>If a fire of severity level ${spread} happens here, <br>then within two years, the property has a:</p>
+<div>
+</di>
+<p class="category"> 
+<span class="pred-label ${labelPrediction(info, "permit")}-p"">${labelPrediction(info, "permit")}</span>
+chance of major repairs</p>
+<p class="category">
+<span class="pred-label ${labelPrediction(info, "transfer")}-t">${labelPrediction(info, "transfer")}</span>
+chance of being sold</p>
+<p class="category">
+<span class="pred-label ${labelPrediction(info, "vacant")}-v">${labelPrediction(info, "vacant")}</span>
+chance of being left vacant.</p>
+<button type="button" id="popupClose" class="popup-close control-button">Close & Zoom Out</button>`,

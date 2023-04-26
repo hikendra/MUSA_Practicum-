@@ -1,0 +1,827 @@
+---
+title: "PhilaFire_PropensityScore"
+author: "Ben Keel"
+date: "2023-03-20"
+output: html_document
+---
+
+# Set Up
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(boxr)
+library(mapview)
+library(sf)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(tigris)
+library(viridis)
+library(dplyr)
+library(tidycensus)
+library(ggplot2)
+library(RSocrata)
+library(lubridate)
+library(janitor)
+library(MatchIt)
+
+options(scipen = 999)
+mapTheme <- theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background=element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm"))
+
+#Color Palettes
+palette3_sat <- c("#e19825","#d55816","#7b230b")
+palette3_desat <- c("#B19C7D","#7F5F52","#262626")
+
+palette4 <- c("#f1c82b","#e19825","#d55816","#7b230b")
+palette4_desat <- c("#B19C7D","#B27D49","#7F5F52","#262626")
+
+palette5_sat <- c("#f1c82b","#e19825","#d55816","#7b230b","#413028")
+pallette5_desat <- c("#ead5b7","#d2b190","#b18e6f","#7f5f52","#413028")
+
+palette6_sat <- c("white","#f1c82b","#e19825","#d55816","#7b230b","#413028")
+
+
+palette7_cats <- c("#b9cfcf","#20b1ae","#e19825","#7b230b","#b47c49", "#3f3128", "#8f8172")
+
+#Sources for Graphs
+creditFire <- "Source: Philadelphia Fire Department"
+creditOpen <- "Source: Open Data Philly"
+
+g<-glimpse
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+crs <- "EPSG:4326"
+PHL_crs <- 'ESRI:102411' #This measurement-based CRS projection is for the West Coast
+
+```
+
+#Process
+
+1. Load in results, as we captured in EDA.
+
+2. Add open data covariates (OPA, ACS, Transfer Values) to those results.
+
+3. Check mean (0 to 1) or of results for each test group. 
+
+# Tying the Sample Code to Our Own Data
+
+<https://sejdemyr.github.io/r-tutorials/statistics/tutorial8.html>
+
+## In the sample data:
+
+Outcome variable of interest: standardized math score
+
+Independent variable of interest: Catholic School y/n
+
+Covariates:
+
+-   race_white: Is the student white (1) or not (0)?
+
+-   p5hmage: Mother's age
+
+-   w3income: Family income
+
+-   p5numpla: Number of places the student has lived for at least 4 months
+
+-   w3momed_hsb: Is the mother's education level high-school or below (1) or some college or more (0)?
+
+## In our data:
+
+Outcome variable of interest: Vacancy / Permits / Transfers
+
+Independent variable of interest: Fire y/n
+
+-   Structure Fires Spatialized
+
+    -   address (ID)
+
+Covariates:
+
+-   OPA Data (Tab Join)
+
+    -   address (ID)
+    
+    -   building_code (categorical)
+    
+    -   total_livable_area (continuous)
+
+    -   number_of_bedrooms (continuous)
+    
+    -   number_of_bathrooms (continuous)
+    
+    -   year_built (continuous)
+    
+    -   quality_grade (ordinal)
+    
+    -   owner occupied (t/f)
+    
+    -   assessment price/sqft (continuous)
+
+-   ACS Data (Spatial Join)
+
+    -   Tract Average Income (continuous)
+    
+    -   Tract average White racial makeup % (continuous)
+    
+-   Neighborhoods (Spatial Join)
+
+    -   NHood Name
+    
+-   Transfers Data (optional)
+    
+    -   Sales price of 5 nearest buildings (continous) 
+
+#Data Imports
+
+## Fire Data
+
+### Loading In
+
+```{r Box Set Up, message=FALSE, warning=FALSE}
+
+## INSERT BOX WORKFLOW HERE ##
+box_auth(client_id = "7olfapklfw3aflgpeb2kopxj1jceogg0", 
+         client_secret = "xMUYd0SngtrtzGC92cZKon2jd6yyvM9d")
+
+box_setwd(186732420366)
+
+structureFire <- box_read_excel(1093000179542)
+
+g(structureFire)
+
+
+```
+
+### Cleaning
+
+```{r Cleaning The Dataset}
+# Creating geometry for the fires
+dat <- structureFire
+
+dat <- dat %>% drop_na("Longitude", "Latitude") %>%
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = "EPSG:4326")
+
+# Cleaning the column names
+dat <- clean_names(dat)
+
+# Address string
+dat <-
+  dat %>% mutate(street_type = ifelse(street_type == 'AV', "AVE", street_type)) %>% 
+  unite(address, c('address_number', 'street_prefix', 'street_name', 'street_type'), sep = " ", remove = FALSE, na.rm=TRUE)
+
+# Extracting quarter
+dat <- dat %>% mutate(quarter = floor_date(alarm_date, unit="quarter"))
+
+# Reducing columns
+dat <- dat %>%
+  dplyr::select(address, quarter, property_use, incident_number, number_of_exposures, incident_type, building_status, fire_spread, no_spread, code_description, geometry, alarm_date, cad_nature_code_description,
+                minor_damage, significant_damage, heavy_damage, extreme_damage)
+
+# Removing duplicates
+dat <- dat[!duplicated(dat$incident_number),]
+
+dat_boolean <- dat%>%
+  st_drop_geometry%>%
+  mutate(fire = 1)%>%
+  dplyr::select(address, fire)
+
+```
+
+## ACS Philadelphia
+
+### Variables
+
+```{r Key and Variables}
+
+census_api_key("3c9540be1434ac4b38e6e55d60e8ee95909f2254", overwrite = TRUE)
+
+#Variables
+acs_variable_list.2020 <- load_variables(2020, #year
+                                         "acs5", #five year ACS estimates
+                                         cache = TRUE)
+
+acs_variable_list.2016 <- load_variables(2016, #year
+                                         "acs5", #five year ACS estimates
+                                         cache = TRUE)
+
+```
+
+### Loading
+
+```{r ACS Data Loading, warning=FALSE, message=FALSE}
+
+acs_vars <- c("B02001_001E", #Total Population
+              "B02001_002E", #Total Population White Only
+              "B19013_001E", #Median HH Income
+              "B25002_001E", #Total Units
+              "B25002_003E" #Total Vacant Units
+              )
+
+acsTractsPHL.2020 <- get_acs(geography = "tract",
+                             year = 2020, 
+                             variables = acs_vars, 
+                             geometry = TRUE, 
+                             state = "PA", 
+                             county = "Philadelphia", 
+                             output = "wide")%>%
+  rename(Total_Pop = B02001_001E,
+         Total_Pop_WhiteOnly = B02001_002E,
+         Med_Income = B19013_001E,
+         Total_Vacant = B25002_003E,
+         Total_Units = B25002_001E)%>%
+  mutate(Perc_White = Total_Pop_WhiteOnly/Total_Pop,
+         Perc_Vacant = Total_Vacant*100/Total_Units)%>%
+  dplyr::select(-B02001_001M, -B02001_002M, -B19013_001M, -Total_Pop_WhiteOnly)%>%
+  st_set_crs("EPSG:4326")
+
+```
+
+## OPA Data
+
+### Loading
+
+```{r OPA Data Import}
+# Reading the data
+opa_dat <- read_csv("../Data/OpenDataPhilly-opa_properties_public.csv")
+
+# Creating geometry for the properties
+opa_dat <- opa_dat%>%
+  drop_na(lat, lng)%>%
+  st_as_sf(coords = c("lat", "lng"),
+           crs = "EPSG:4326")
+
+```
+
+### Cleaning
+
+```{r OPA Data Cleaning}
+
+# Reducing columns
+opa_ps <- opa_dat[!duplicated(opa_dat$location),] %>%
+  dplyr::select(location, category_code, category_code_description, building_code, building_code_description, total_area, total_livable_area, market_value, mailing_street, number_of_bedrooms, number_of_bathrooms, number_stories, year_built, quality_grade)%>%
+  filter(category_code == 1 | category_code == 2 | category_code == 3)%>%
+  mutate(Price_Sqft = ifelse(is.na(total_livable_area) == FALSE & total_livable_area != 0, market_value / total_area, NA),
+         quality_grade_mod = case_when(quality_grade == 1 ~ "E",
+                                   quality_grade == 2 ~ "D",
+                                   quality_grade == 3 ~ "C",
+                                   quality_grade == 4 ~ "B",
+                                   quality_grade == 5 ~ "A",
+                                   quality_grade == 6 ~ "A+", 
+                                   TRUE ~ quality_grade,
+                                   ))%>%
+  rename(address = location)%>%
+  mutate(condo = ifelse(grepl("CONDO", building_code_description) == TRUE, TRUE, FALSE),
+        owner_occ = ifelse(condo == FALSE & category_code_description != "MULTI FAMILY",
+                           ifelse(address == mailing_street, TRUE, FALSE),
+                           NA))%>%
+  filter(Price_Sqft < 100000)%>%
+  dplyr::select(-quality_grade)
+
+opa_ps$quality_grade_mod <- factor(opa_ps$quality_grade_mod, order = TRUE,
+                               levels = c("A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "E+", "E", "E-"))
+
+
+```
+
+## Neighborhoods
+
+### Loading In
+
+```{r}
+
+#https://github.com/azavea/geo-data
+
+nhoods <- st_read("../Data/Neighborhoods_Philadelphia.geojson")%>%
+  st_set_crs("EPSG:4326")
+
+```
+
+
+## Combining Data
+
+```{r Tabular and Spatial Join }
+
+#Fires
+opa_fire <- opa_ps%>%
+  left_join(dat_boolean, by="address")
+
+opa_fire$fire <- as.factor(ifelse(is.na(opa_fire$fire), 0, 1))
+
+#ACS and NHoods
+opa_sf <- opa_fire%>%
+  st_join(acsTractsPHL.2020)%>%
+  st_join(nhoods)
+
+```
+
+# PreTests
+```{r }
+
+g(filter(opa_sf, total_livable_area > 10000))
+
+opa_sf_cov <- c('total_livable_area', 'number_of_bedrooms', 'Price_Sqft', 'Med_Income', 'owner_occ', 'Perc_White', 'quality_grade_mod', 'name')
+
+opa_sf %>%
+  filter(total_livable_area < 10000,
+       Price_Sqft < 10000)%>%
+  st_drop_geometry()%>%
+  group_by(fire) %>%
+  dplyr::select(one_of(opa_sf_cov)) %>%
+  summarise_all(funs(mean(., na.rm = T)))
+
+```
+
+# Propensity Score Estimation
+
+```{r}
+
+g(opa_sf)
+
+m_ps <- glm(fire ~ total_livable_area + number_of_bedrooms + Price_Sqft + Med_Income + Perc_White, 
+            family = binomial(), data = opa_sf)
+
+summary(m_ps)
+
+
+m_ps2 <- glm(fire ~ total_livable_area + number_of_bedrooms + Price_Sqft + Med_Income + Perc_White + owner_occ + quality_grade_mod + name, 
+            family = binomial(), data = opa_sf)
+
+summary(m_ps2)
+
+```
+
+```{r}
+
+prs_df <- data.frame(pr_score = predict(m_ps2, type = "response"),
+                     fire = m_ps2$model$fire)
+head(prs_df)
+
+```
+
+# REgion of common support
+
+```{r}
+
+labs <- paste("Actual school type attended:", c("Fire", "No Fire"))
+prs_df %>%
+  mutate(fire = ifelse(fire == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x = pr_score)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~fire) +
+  xlab("Probability of Having A Fire") +
+  theme_bw()
+
+```
+
+# Matching Algorithm
+
+```{r}
+
+opa_nomiss <- opa_sf %>%  # MatchIt does not allow missing values
+  dplyr::select(address, fire, one_of(opa_sf_cov)) %>%
+  na.omit()
+
+mod_match <- matchit(fire ~ total_livable_area + number_of_bedrooms + Price_Sqft + Med_Income + Perc_White + owner_occ + quality_grade_mod + name,
+                     method = "nearest", data = opa_nomiss)
+
+```
+
+```{r}
+
+dta_m <- match.data(mod_match)
+
+```
+
+#Difference In Means
+
+```{r}
+
+dta_m %>%
+  st_drop_geometry()%>%
+  group_by(fire) %>%
+  dplyr::select(one_of(opa_sf_cov)) %>%
+  summarize_all(funs(mean))
+
+```
+
+# Calculating Differences Between Prop-Matched Structures
+
+## Loading In Data
+
+```{r Loading Panel}
+
+panel_opa <- read_csv("../Data/panel_OPA_Fire_OpenData.csv")
+
+```
+## Filter Panel By Addresses in Prop-Matched Set
+
+```{r}
+
+#assign fire time and incident number to one member of the subclass
+dta_m_1 <- dta_m %>%
+  filter(fire == 1)%>%
+  left_join(st_drop_geometry(dplyr::select(dat, incident_number, address, quarter)))
+
+#assign same data to other member of the subclass
+dta_m_2 <- dta_m %>%
+  filter(fire == 0)%>%
+  left_join(st_drop_geometry(dplyr::select(dta_m_1, incident_number, quarter, subclass)), by="subclass")
+
+dta_m_withTime <- rbind(dta_m_1, dta_m_2) #combine sets
+
+panel_pm_4Y <- panel_opa%>%
+  inner_join(dta_m_withTime, by="address")%>%
+  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
+         ySinceFire = mSinceFire / 12)%>%
+  filter(mSinceFire >= -49,#Eliminate entries before fires (occurs because of incident_number group duplicates)
+         mSinceFire < 49, #Eliminate entries after four years, as they are irrelevant (arbitrary)
+         !(count > 0 & ySinceFire > 0))%>% #For addresses with multiple incidents, take out repeated fire observ's
+  st_as_sf()
+
+panel_pm_4Y$count <- as.factor(panel_pm_4Y$count)
+
+
+panel_pm_4YForward <- panel_opa%>%
+  inner_join(dta_m_withTime, by="address")%>%
+  mutate(mSinceFire = interval(quarter.y, quarter.x) %/% months(1),
+         ySinceFire = mSinceFire / 12)%>%
+  filter(mSinceFire >= -1,#Eliminate entries before fires (occurs because of incident_number group duplicates)
+         mSinceFire < 49, #Eliminate entries after four years, as they are irrelevant (arbitrary)
+         !(count > 0 & ySinceFire > 0))%>% #For addresses with multiple incidents, take out repeated fire observ's
+  st_as_sf()
+
+
+#2 Year Outcomes for Each Incident
+panel_pm_Results2Y <- panel_pm_4YForward %>%
+    st_drop_geometry()%>%
+    filter(., ySinceFire <= 2)%>%
+    group_by(address, incident_number, subclass, fire)%>%
+    summarize(count = ifelse(sum(count) > 0, 1, 0),
+              severity_index = max(severity_index),
+              outcome_vacant = sum(n_Vacant),
+              outcome_permit = sum(n_permits),
+              outcome_transfer = sum(n_transfers),
+              quarter = min(quarter.x))
+  
+
+```
+
+#Graph Outcome Proximity to Fires
+
+```{r}
+
+#Distribution of Outcomes, Measuring Time between Fire and Outcome
+panel_pm_4Y%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, ySinceFire, fire)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value > 0)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+
+```
+## Map of Same Outcomes (Forward)
+
+```{r}
+
+#Fires
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(fire == 1)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(color = "#20b1ae", size=0.9, alpha = 0.5)+
+    labs(title = "Fires with Property Transfers, by Years since Fire") +
+    mapTheme()
+
+#No Fires
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(fire == 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(color = "#3f3128", size=0.9, alpha = 0.5)+
+    labs(title = "Fires with Property Transfers, by Years since Fire") +
+    mapTheme()
+
+#Distribution of Outcomes, Measuring Time between Fire and Outcome
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012,
+         fire == 1)%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, ySinceFire, fire)%>%
+  gather(Variable, value, -ySinceFire, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=ySinceFire), size=0.9)+
+    scale_color_viridis_c()+
+    facet_wrap(~Variable)+
+    labs(title = "Fires with Property Transfers, by Years since Fire") +
+    mapTheme()
+  
+#Distribution of Outcomes, Measuring Time between Fire and Outcome
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012,
+         fire == 0)%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, ySinceFire, fire)%>%
+  gather(Variable, value, -ySinceFire, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=ySinceFire), size=0.9)+
+    scale_color_viridis_c()+
+    facet_wrap(~Variable)+
+    labs(title = "Prop-Matched Set, No Fires, by Years since Fire") +
+    mapTheme()
+  
+
+```
+```{r Vacancy Clusters of reporting time}
+
+#Filter results between 0 and 1 year, 1.25 and 2 years, 2.25 and 3 years, 3.25 and 4 years
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0))%>%
+  mutate(ySinceFire_floor = floor(ySinceFire))%>%
+  dplyr::select(n_transfers, n_Vacant, n_permits, fire, ySinceFire_floor)%>%
+  gather(Variable, value, -ySinceFire_floor, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=fire), size=0.75)+
+    scale_color_manual(values= c("#3f3128", "#e19825"))+
+    facet_wrap(~Variable + ySinceFire_floor, nrow=3, ncol=5)+
+    labs(title = "Permits in Properties With Fires, by Years After The Fire") +
+    mapTheme()
+
+```
+
+Assuming that permits that happen after a year have been delayed and are not desirable, we can order neighborhoods and points by this value. See below:
+
+```{r Vacancy Clusters of reporting time}
+
+#Divide permits by before 1 and after 1 year
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_permits == 0))%>%
+  mutate(delayed = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_permits, fire, delayed)%>%
+  gather(Variable, value, -delayed, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(color=fire), size=0.75)+
+    scale_color_manual(values= c("#3f3128", "#20b1ae"))+
+    facet_wrap(~delayed, nrow=1)+
+    labs(title = "Permits in Properties With Fires, by Years After The Fire") +
+    mapTheme()
+
+```
+The map shows some differences.
+
+```{r}
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_permits == 0), fire == 1)%>%
+  mutate(delayed = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_permits, delayed, name)%>%
+  st_drop_geometry()%>%
+  group_by(name) %>%
+  summarize(delayRate = sum(delayed)/sum(n_permits>0), 
+            permits = sum(n_permits))%>%
+  arrange(desc(delayRate))%>%
+  filter(permits > 1)%>%
+  left_join(nhoods, by="name")%>%
+  st_as_sf()%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(fill=delayRate))+
+    scale_fill_viridis_c()+
+    labs(title = "Percentage of properties with permits 1 year after a fire") +
+    mapTheme()
+
+#g(panel_pm_4YForward)
+
+```
+
+Similarly, vacancies that linger after 1 year signal slow recovery. Here are two maps that show the spatial distribution, either by points or summarized by neighborhood.
+
+```{r}
+
+#Divide vacancies by before 1 and after 1 year
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_Vacant == 0))%>%
+  mutate(lingering = ifelse(ySinceFire <= 1.5, 0, 1))%>%
+  dplyr::select(n_Vacant, fire, lingering)%>%
+  gather(Variable, value, -lingering, -fire, -geometry)%>%
+  filter(value > 0)%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, aes(fill=q5(Perc_Vacant)), color=NA)+
+        scale_fill_manual(values=palette5_vac, labels=qBr(acsTractsPHL.2020, "Perc_Vacant"))+
+    geom_sf(aes(color=fire), size=1)+
+    scale_color_manual(values= c("#20B1AE", "#D55816"))+
+    facet_wrap(~lingering, nrow=1)+
+    labs(title = "Vacancies in Properties With Fires, by Years After The Fire") +
+    mapTheme()
+
+```
+
+```{r}
+
+panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_Vacant == 0), fire == 1)%>%
+  mutate(lingering = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_Vacant, lingering, name)%>%
+  st_drop_geometry()%>%
+  group_by(name) %>%
+  summarize(lingeringRate = sum(lingering)/sum(n_Vacant>0), 
+            vacancies = sum(n_Vacant))%>%
+  arrange(desc(lingeringRate))%>%
+  filter(vacancies > 1)%>%
+  left_join(nhoods, by="name")%>%
+  st_as_sf()%>%
+  ggplot()+
+    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(fill=lingeringRate))+
+    scale_fill_viridis_c()+
+    labs(title = "Rate of Lingering Vacancies by Neighborhood",
+         subtitle = "Neighborhoods with Vacancies 1 Year After A Fire vs Total Vacancies") +
+    mapTheme()
+
+#g(panel_pm_4YForward)
+
+```
+
+## Are investors buying fire-stricken properties at a higher rate than normal properties?
+
+```{r}
+
+transfers <- read_csv("../Data/OpenDataPhilly-transfers.csv")
+
+#Select relevant fields and filter to fire data range
+transfers_data <- transfers%>%
+  dplyr:: select(objectid, recording_date, street_address, document_type, grantors, grantees)%>%
+  filter(year(recording_date) > 2008,
+         !is.na(street_address))%>%
+  rename(address = street_address)%>%
+  mutate(quarter = as_date(floor_date(recording_date, unit="quarter")))
+
+```
+
+```{r}
+
+toMatch <- c('LLC', 'LP', 'REO', 'Investments', 'Homes', 'Trust', 'Corp', 'Inc')
+
+investors <- unique(grep(paste(toMatch,collapse="|"), 
+                        transfers_data$grantees, value=TRUE))
+
+#Check for owners with 5+ properties
+investors_opa <- opa_dat%>%
+  st_drop_geometry()%>%
+  dplyr::select(owner_1)%>%
+  group_by(owner_1)%>%
+  filter(n()>1 & n()<100)
+
+investors_list_opa <- unique(investors_opa)
+
+transfers_data <- transfers_data%>%
+  mutate(investorBuy = ifelse(grantees %in% investors | grantees %in% investors_list_opa, TRUE, FALSE),
+         investorSell = ifelse(grantors %in% investors | grantors %in% investors_list_opa, TRUE, FALSE))%>%
+  mutate(homeownerToInvestor = ifelse(investorBuy == TRUE & investorSell== FALSE, TRUE, FALSE),
+         investorToHomeowner = ifelse(investorSell == TRUE & investorBuy== FALSE, TRUE, FALSE))
+
+#join transfers data to property by address and quarter
+
+panel_pm_4Y_sales <- panel_pm_4Y%>%
+  rename(quarter = quarter.x)%>%
+  left_join(dplyr::select(transfers_data, address, quarter, homeownerToInvestor, investorToHomeowner), by=c("address", "quarter"))
+
+
+```
+
+
+### Homeowner to investor, investor to homeowner
+
+```{r}
+
+
+panel_pm_4Y_sales%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_transfers == 0))%>%
+  dplyr::select(ySinceFire, fire, investorToHomeowner)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value == TRUE)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+panel_pm_4Y_sales%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_transfers == 0))%>%
+  dplyr::select(ySinceFire, fire, investorToHomeowner)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value == TRUE)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+```
+
+```{r}
+
+panel_pm_4Y_sales%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  st_drop_geometry%>%
+  ungroup()%>%
+  filter(!(n_transfers == 0))%>%
+  dplyr::select(ySinceFire, fire, investorBuy)%>%
+  gather(Variable, value, -ySinceFire, -fire)%>%
+  filter(value == TRUE)%>%
+    count(ySinceFire, fire, Variable)%>%
+  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
+    geom_col(position="dodge", just = 0.5)+
+      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
+       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
+  facet_wrap(~Variable) + 
+  xlab("Years Since Fire")+
+  ylab("Count of Outcomes")+
+  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
+    theme(panel.background = element_rect(fill = "#f3efe0"))+
+  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
+  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
+  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+
+
+```
+
+
+
