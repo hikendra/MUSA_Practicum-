@@ -45,6 +45,10 @@ library(lubridate)
 library(janitor)
 library(proxy)
 library(FNN)
+library(plotROC)
+library(pROC)
+library(ggcorrplot)
+
 
 options(scipen = 999)
 mapTheme <- theme(plot.title =element_text(size=12),
@@ -62,10 +66,13 @@ mapTheme <- theme(plot.title =element_text(size=12),
                   panel.grid.minor=element_blank(),
                   legend.direction = "vertical", 
                   legend.position = "right",
-                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  #plot.margin = margin(1, 1, 1, 1, 'cm'),
                   legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm"))
 
 #Color Palettes
+
+palette2 <- c("#b9cfcf", "#e19825")
+
 palette3_sat <- c("#e19825","#d55816","#7b230b")
 palette3_desat <- c("#B19C7D","#7F5F52","#262626")
 
@@ -89,6 +96,13 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 ```{r Box Set Up, include=FALSE}
 #Loading in Fire Data 
 ## INSERT BOX WORKFLOW HERE ##
+box_auth(client_id = "zhmuvtkofhuu21py025uhr8cffzew2om", 
+         client_secret = "k39pMJM1FUnBmGnRrM9zVUWk1eth0EVi")
+box_setwd(186732420366)
+box_getwd()
+box_ls()
+list <- box_ls() %>% as.data.frame()
+structureFire <- box_read_excel(1093000179542) 
 
 dat <- structureFire
 
@@ -540,17 +554,14 @@ opa_count.panel[is.na(opa_count.panel)] <- 0 # Assigning 0 to NA for everything
 
 ### 311 Call Data
 ```{r loading 311 data, include=FALSE}
-
 #311 Data Upload, downloaded from https://data.phila.gov/visualizations/311-requests/
 
 All311 <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/OpenDataPhilly-311Calls.csv")
 
 AllLI <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/complaints.geojson")
-
-
 ```
 
-Filtering 311 Data to the appropriate categories. Data is limited to only 2014-2020.
+Filtering 311 Data to the appropriate categories. Data is limited to only 2014-2020. START RUNNING HERE
 ```{r undefined , include=FALSE}
 #Filtering to only the fire/building-relevant terms
 
@@ -808,18 +819,18 @@ panel_FirePositivesDiff <- panel_FirePositives%>%
 
 #Chart:
 #For every outcome, what is the median time since a fire occurred?
-panel_FirePositivesDiff%>%
-  st_drop_geometry()%>%
-  ungroup()%>%
-  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0)) %>%
-  mutate(ySinceFire = mSinceFire / 12)%>%
-  dplyr::select(n_Vacant, n_permits, n_transfers, ySinceFire)%>%
-  gather(Variable, value, -ySinceFire)%>%
-  filter(value > 0)%>%
-  group_by(Variable)%>%
-  summarize(`Median Years Since Fire` = median(ySinceFire))%>%
-  kable()%>%
-  kable_styling()
+#panel_FirePositivesDiff%>%
+#  st_drop_geometry()%>%
+#  ungroup()%>%
+#  filter(!(n_Vacant == 0 & n_permits == 0 & n_transfers == 0)) %>%
+#  mutate(ySinceFire = mSinceFire / 12)%>%
+#  dplyr::select(n_Vacant, n_permits, n_transfers, ySinceFire)%>%
+#  gather(Variable, value, -ySinceFire)%>%
+#  filter(value > 0)%>%
+#  group_by(Variable)%>%
+#  summarize(`Median Years Since Fire` = median(ySinceFire))%>%
+#  kable()%>%
+#  kable_styling()
 ```
 
 ## Results (Boolean)
@@ -830,16 +841,16 @@ panel_Results2Y <- read_csv("/Users/myronbanez/Desktop/Coding/PhilaFireData/pane
 
 ```{r Calculate Boolean Outcome Code}
 #six months boolean outcome code
-panel_Results2Q <- panel_OPAFireOpenData %>%
-    mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
-                               (count > 0 | lag(count, n=1) > 0) &
-                                (n_311Vacant > 0) > 0 , 1, 0),
-           firePermit2Q = ifelse(address == lag(address, n=1) & 
-                               (count > 0 | lag(count, n=1) > 0) &
-                                (n_permits > 0) > 0 , 1, 0),
-          fireTransfer2Q = ifelse(address == lag(address, n=1) & 
-                     (count > 0 | lag(count, n=1) > 0) &
-                      (n_transfers > 0) > 0 , 1, 0))
+#panel_Results2Q <- panel_OPAFireOpenData %>%
+#    mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
+#                               (count > 0 | lag(count, n=1) > 0) &
+#                                (n_311Vacant > 0) > 0 , 1, 0),
+#           firePermit2Q = ifelse(address == lag(address, n=1) & 
+#                               (count > 0 | lag(count, n=1) > 0) &
+#                                (n_permits > 0) > 0 , 1, 0),
+#          fireTransfer2Q = ifelse(address == lag(address, n=1) & 
+#                     (count > 0 | lag(count, n=1) > 0) &
+#                      (n_transfers > 0) > 0 , 1, 0))
 
 #2 Year Outcomes for Each Incident
 #panel_Results2Y <- panel_FirePositivesDiff %>%
@@ -857,7 +868,7 @@ panel_Results2Q <- panel_OPAFireOpenData %>%
 # Later: Join back to original dataset to get the spatial features
 ```
 
-# Feature Engineering - add census and more building stuff
+# Feature Engineering 
 
 ### OPA and Fire Dataset 
 ```{r Cleaning Dataframes and Slight Engineering}
@@ -1049,10 +1060,106 @@ fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Du
 fire_panel <- fire_panel %>% rename(neighborhood = mapname) # Renaming
 ```
 
-### Fire Stations
-```{r}
-stations <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/Fire_Dept_Facilities.geojson") %>% 
-  st_transform(crs = 3652) %>% dplyr::select(LOCATION, geometry)
+### Redevelopment Certified Areas
+```{r Redevelopment Area}
+#https://www.opendataphilly.org/dataset/redevelopment-certified-areas
+
+rca <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/Redevelopment_Certified_Areas.geojson") %>% 
+  st_transform(crs = 3652) %>% dplyr::select(NAME)
+
+fire_panel <- st_join(fire_panel, rca) # Join
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
+
+# 
+fire_panel <-fire_panel %>%
+  mutate(redevelopment_area = case_when(
+    is.na(fire_panel$NAME) ~ 0, # Is not in a redevelopment certified area
+    TRUE ~ 1 # Is in a redevelopment certified area
+  ))
+
+fire_panel <- fire_panel %>% dplyr::select(-NAME)
+```
+
+### Demographics
+```{r Demographics}
+census_api_key("05b9c101eb2ee7dc7abb88140da527ce637ac07f", overwrite = TRUE)
+
+## Income, Age, White, Black, AIAN, Asian, NHPI, Other, Two or More, Hispanic
+acs_fe <- c("B19013_001", "B11005_001", "B02001_002", "B02001_003", "B02001_004", "B02001_005", "B02001_006", "B02001_007", "B02001_008","B03002_001")
+
+acs_data <- load_variables(year = 2019, dataset = "acs5", cache = TRUE)
+acs_features <- get_acs(geography = "tract",
+                             year = 2020, 
+                             variables = acs_fe, # Income, Age, Race
+                             geometry = TRUE, 
+                             state = "PA", 
+                             county = "Philadelphia", 
+                             output = "wide") %>% st_transform(st_crs(neighborhoods))
+acs_features <- acs_features %>% rename(income = B19013_001E, 
+                                        age = B11005_001E, 
+                                        white = B02001_002E,
+                                        black = B02001_003E,
+                                        AIAN = B02001_004E,
+                                        asian = B02001_005E,
+                                        NHPI = B02001_006E,
+                                        other = B02001_007E,
+                                        multi = B02001_008E,
+                                        hispanic = B03002_001E) %>% 
+                      dplyr::select(NAME, income, age, white, black, AIAN, asian, NHPI, other, multi, hispanic)
+
+## Percent Change in White Population
+vars <- c("B03002_003") #Variable for white alone
+philly_data_2010 <- get_acs(geography = "tract",
+                        variables = vars,
+                        year = 2010,
+                        state = "PA",
+                        county = "Philadelphia County",
+                        key = census_api_key) %>% dplyr::select(NAME, estimate) %>% rename(estimate_2010 = estimate)
+philly_data_2019 <- get_acs(geography = "tract",
+                        variables = vars,
+                        year = 2019,
+                        state = "PA",
+                        county = "Philadelphia County",
+                        key = census_api_key) %>% dplyr::select(NAME, estimate) %>% rename(estimate_2019 = estimate)
+philly_data <- left_join(philly_data_2010, philly_data_2019, by="NAME" ) # Joining frames together
+philly_data <- philly_data %>% mutate(white_change = (estimate_2019 - estimate_2010)/estimate_2010) # Calculation
+philly_data$white_change[!is.finite(philly_data$white_change)] <- 0 # Getting rid of Inf
+philly_data$white_change <- round(philly_data$white_change, digits = 2) # Rounding
+
+# Joins
+acs_features_full <- left_join(acs_features, philly_data, by="NAME") %>% dplyr::select(-estimate_2010, -estimate_2019)
+fire_panel <- st_join(fire_panel, acs_features_full) 
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
+
+## Poverty
+fire_panel <-
+  fire_panel %>%
+  mutate(poverty = case_when( 
+    income < 25000 ~ "Yes", 
+    TRUE ~ "No")) 
+
+## Income Level - 40k is best so far
+fire_panel <-
+  fire_panel %>%
+  mutate(income_level = case_when(
+    income < 40000 ~ "Low", 
+    TRUE ~ "High")) 
+
+## Price per sqft
+fire_panel <-
+  fire_panel %>%
+  mutate(value_sqft = market_value/total_livable_area) 
+
+fire_panel$value_sqft[!is.finite(fire_panel$value_sqft)] <- 0
+fire_panel_nogeo <- fire_panel %>% st_drop_geometry()
+fire_panel <- left_join(fire_panel_nogeo, dat_geo, by="address")
+fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
+fire_panel_nogeo <- fire_panel %>% st_drop_geometry()
+```
+
+### Schools
+```{r Schools}
+schools <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/Schools.geojson") %>% st_transform(crs = 3652)
 
 # Setting up nearest neighbors
 st_c <- st_coordinates
@@ -1077,696 +1184,60 @@ nn_function <- function(measureFrom,measureTo,k) {
   return(output)  
 }
 
+fire_panel <- fire_panel %>% st_as_sf() %>% st_transform(crs = 3652)
+
 fire_panel <-
   fire_panel %>% 
     mutate(
-      stations_nn1 = nn_function(st_c(fire_panel), st_c(stations), 1),
-      stations_nn2 = nn_function(st_c(fire_panel), st_c(stations), 2), 
-      stations_nn3 = nn_function(st_c(fire_panel), st_c(stations), 3), 
-      stations_nn4 = nn_function(st_c(fire_panel), st_c(stations), 4), 
-      stations_nn5 = nn_function(st_c(fire_panel), st_c(stations), 5)) 
+      schools_nn1 = nn_function(st_c(fire_panel), st_c(schools), 1), 
+      schools_nn2 = nn_function(st_c(fire_panel), st_c(schools), 2), 
+      schools_nn3 = nn_function(st_c(fire_panel), st_c(schools), 3), 
+      schools_nn4 = nn_function(st_c(fire_panel), st_c(schools), 4), 
+      schools_nn5 = nn_function(st_c(fire_panel), st_c(schools), 5)) 
 
-#Neighborhoods with lower levels of fire department staffing and resources may experience longer response times and more difficulty in containing fires.
+fire_panel_nogeo <- fire_panel %>% dplyr::select(-geometry)
+
+#write.csv(fire_panel_nogeo, "~/Desktop/Coding/fire_panel_nogeo.csv")
 ```
 
-### Tax Deliquency -- Iffy on this
+# VARIABLES 
 ```{r}
-#https://www.opendataphilly.org/dataset/property-tax-delinquencies
-deliquent <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/real_estate_tax_delinquencies.geojson") %>% 
-  st_transform(crs = 3652)
+NON-FE
+#Continuous: severity_index, total_livable_area, market_value, sale_price, taxable_building
+
+#Categorical: number_of_bedrooms, number_of_bathrooms, number_stories, interior_condition, year_built, exterior_condition, fireplaces
+
+FE
+#Categorical: redevelopment_area, grade, fuel_type, topo, electric_heater, air_central, cat_code, owner_occ, fireplace, mkt_value, bedrooms, bathrooms, area, built_year, condition, sale_value, resident_type, poverty, income_level
+
+#Continuous: value_sqft, schools_nn1, schools_nn2, schools_nn3, schools_nn4, schools_nn5,income, age, white, black, AIAN, asian, NHPI, other, multi, hispanic, mSinceFire
+
+train_vacant %>% 
+  dplyr::select(vacant, severity_index, total_livable_area, market_value, sale_price, taxable_building, income, age, white, black, AIAN, asian, NHPI, other, multi, hispanic ) %>% 
+  gather(Variable, Value, -vacant) %>% 
+   ggplot(aes(Value, vacant)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of continuous variables", 
+          caption="Figure 4.1") +
+     plotTheme()
 ```
 
-### Redevelopment Certified Areas
-```{r}
-#https://www.opendataphilly.org/dataset/redevelopment-certified-areas
+```{r Saving Variables}
+#Variables that are in the dataset without feature engineering.
+variables_raw <- c("total_livable_area", "market_value", "sale_price", "number_of_bedrooms", "number_of_bathrooms", 
+                   "number_stories", "interior_condition", "quality_grade", "year_built", "central_air", "exterior_condition", 
+                   "fireplaces", "fuel", "taxable_building", "topography", "type_heater", "cat_code", "owner_occ", #OPA DATA
+                  "mSinceFire", "ySinceFire", #FIRE DATA
+                  "neighborhoods", #NEIGHBORHOOD DATA
+                  "income", "age", "white", "black", "AIAN", "asian", "NHPI", "other", "multi", "hispanic", "estimate_2010", "
+                  estimate_2019" #ACS DATA
+                  ) 
+#address, incident_number, count, quarter, outcome_vacant, outcome_permit, outcome_transfer
 
-rca <- st_read("/Users/myronbanez/Desktop/Coding/PhilaFireData/Redevelopment_Certified_Areas.geojson") %>% 
-  st_transform(crs = 3652) %>% dplyr::select(NAME)
-
-fire_panel <- st_join(fire_panel, rca) # Join
-fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
-
-# 
-fire_panel <-fire_panel %>%
-  mutate(redevelopment_area = case_when(
-    is.na(fire_panel$NAME) ~ 0, # Is not in a redevelopment certified area
-    TRUE ~ 1 # Is in a redevelopment certified area
-  ))
-
-fire_panel <- fire_panel %>% dplyr::select(-NAME)
+#Variables that are in the dataset with feature engineering.
+variables_engineered <- c("grade", "fuel_type", "topo", "electric_heater", "air_central", "fireplace", "mkt_value", "bedrooms", "bathrooms", "area", "built_year", "condition", "sale_value", "resident_type", "redevelopment_area", "poverty", "income_level", "white_change" "value_sqft", "schools_nn1", "schools_nn2", "schools_nn3", "schools_nn4", "schools_nn5") 
+#vacant, permit, transfer
 ```
-
-### Demographics
-```{r}
-census_api_key("05b9c101eb2ee7dc7abb88140da527ce637ac07f", overwrite = TRUE)
-
-acs_fe <- c("B19013_001", "B11005_001", "B02001_002", "B02001_003", "B02001_004", "B02001_005", "B02001_006", "B02001_007", "B02001_008","B03002_001")
-# Income, Age, White, Black, AIAN, Asian, NHPI, Other, Two or More, Hispanic
-
-acs_data <- load_variables(year = 2019, dataset = "acs5", cache = TRUE)
-
-acs_features <- get_acs(geography = "tract",
-                             year = 2020, 
-                             variables = acs_fe, # Income, Age, Race
-                             geometry = TRUE, 
-                             state = "PA", 
-                             county = "Philadelphia", 
-                             output = "wide") %>% st_transform(st_crs(neighborhoods))
-
-acs_features <- acs_features %>% rename(income = B19013_001E, 
-                                        age = B11005_001E, 
-                                        white = B02001_002E,
-                                        black = B02001_003E,
-                                        AIAN = B02001_004E,
-                                        asian = B02001_005E,
-                                        NHPI = B02001_006E,
-                                        other = B02001_007E,
-                                        multi = B02001_008E,
-                                        hispanic = B03002_001E) %>% 
-  dplyr::select(income, age, white, black, AIAN, asian, NHPI, other, multi, hispanic)
-
-acs_features <- acs_features %>%
-  mutate(majority_white = case_when(
-    white > sum(black + AIAN + asian + NHPI + other + multi + hispanic) ~ "Yes",
-    TRUE ~ "No"
-  ))
-fire_panel <- st_join(fire_panel, acs_features) 
-fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
-
-# Poverty
-fire_panel <-
-  fire_panel %>%
-  mutate(poverty = case_when( 
-    income < 25000 ~ "Yes", 
-    TRUE ~ "No")) 
-
-# Income Level - 40k is best so far
-fire_panel <-
-  fire_panel %>%
-  mutate(income_level = case_when(
-    income < 40000 ~ "Low", 
-    TRUE ~ "High")) 
-
-# Price per sqft
-fire_panel <-
-  fire_panel %>%
-  mutate(value_sqft = market_value/total_livable_area) 
-
-fire_panel$value_sqft[!is.finite(fire_panel$value_sqft)] <- 0
-
-fire_panel_nogeo <- fire_panel %>% st_drop_geometry()
-fire_panel <- left_join(fire_panel_nogeo, dat_geo, by="address")
-fire_panel <- fire_panel[!duplicated(fire_panel$incident_number),] # Removing Duplicates
-fire_panel_nogeo <- fire_panel %>% st_drop_geometry()
-
-```
-
-### Crime
-### Looks Vacant
-### Building Demolitions
-
-# FIX GEOEMTRY WITH DAT_FE AT SOME POINT 
-
-### The three chunks below might not be needed. Do not run for now
-The table below is the number of fires that had a particular outcome. These are not mutually exclusive, so some fires had two or all three outcomes.
-```{r Calculate 6 months after, echo=TRUE}
-panel_Results <- panel_OPAFire311Permit %>%
-    mutate(fireVacant2Q = ifelse(address == lag(address, n=1) & 
-                               (count > 0 | lag(count, n=1) > 0) &
-                                (n_311Vacant > 0) > 0 , 1, 0),
-           firePermit2Q = ifelse(address == lag(address, n=1) & 
-                               (count > 0 | lag(count, n=1) > 0) &
-                                (n_permits > 0) > 0 , 1, 0),)
-panelResults_Positive <- panel_Results%>%
-  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0)
-results_summary <- panel_Results%>%
-  filter(count > 0 | fireVacant2Q > 0 | firePermit2Q > 0)%>%
-  summarize(Total_Fires = length(unique(address)),
-            Total_311Vacant = sum(fireVacant2Q),
-            Total_Permit = sum(firePermit2Q))
-results_summary%>%
-  kable()%>%
-  kable_styling()
-```
-
-```{r Vacancies vs Total, echo=FALSE}
-panelResults_Positive %>%
-  filter(count > 0 | fireVacant2Q > 0, year(quarter) > 2013)%>%
-  dplyr::select(quarter, count, severity_index, fireVacant2Q)%>%
-  group_by(quarter)%>%
-  summarize(totalFires = sum(count),
-            Vacancy = sum(fireVacant2Q))%>%
-  gather(Variable, value, -quarter)%>%
-  ggplot(aes(x=quarter, y=value, fill =Variable))+
-    geom_bar(stat="identity", position="dodge")+
-      labs(title="Fires with Vacancy Within 6 Months",
-       subtitle="Philadelphia County, 2009-2022")+
-  xlab("Date, Rounded to Beginning of Quarter")+
-  ylab("Number of Fires")+
-  scale_fill_manual(values=c("#e19825", "#20b1ae"))+
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.background = element_rect(fill = "#f3efe0"))
-  
-```
-
-```{r Permits vs Total, echo=FALSE}
-panelResults_Positive %>%
-  filter(count > 0 | firePermit2Q > 0)%>%
-  dplyr::select(quarter, count, severity_index, firePermit2Q)%>%
-  group_by(quarter)%>%
-  summarize(totalFires = sum(count),
-            permits = sum(firePermit2Q))%>%
-  gather(Variable, value, -quarter)%>%
-  ggplot(aes(x=quarter, y=value, fill =Variable))+
-    geom_bar(stat="identity", position="dodge")+
-      labs(title="Fires with Permit Records Within 6 Months",
-       subtitle="Philadelphia County, 2009-2022")+
-  xlab("Date, Rounded to Beginning of Quarter")+
-  ylab("Number of Fires")+
-  scale_fill_manual(values=c("#20b1ae", "#e19825"))+
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.background = element_rect(fill = "#f3efe0"))
-  
-
-```
-
-
-# Modeling Strategy
-```{r Model Set-Up}
-load.fun <- function(x) { 
-  x <- as.character(x) 
-  if(isTRUE(x %in% .packages(all.available=TRUE))) { 
-    eval(parse(text=paste("require(", x, ")", sep=""))) 
-    print(paste(c(x, " : already installed; requiring"), collapse=''))
-  } else { 
-    #update.packages()
-    print(paste(c(x, " : not installed; installing"), collapse=''))
-    eval(parse(text=paste("install.packages('", x, "')", sep=""))) 
-    print(paste(c(x, " : installed and requiring"), collapse=''))
-    eval(parse(text=paste("require(", x, ")", sep=""))) 
-  } 
-} 
-
-packages = c("bayesplot", "lme4","RcppEigen", "tidyr", "broom", "caret", "dials", "doParallel", "e1071", "earth",
-             "ggrepel", "glmnet", "ipred", "klaR", "kknn", "pROC", "rpart", "randomForest",
-             "sessioninfo", "tidymodels","ranger", "recipes", "workflows", "themis","xgboost",
-             "sf", "nngeo", "mapview")
-
-for(i in seq_along(packages)){
-  packge <- as.character(packages[i])
-  load.fun(packge)
-}
-
-session_info()
-```
-
-```{r Initial Split for Training and Test}
-# Vacant
-split_vacant <- initial_split(fire_panel_nogeo, strata = "vacant", prop = 0.70) # do 70 or 75
-train_vacant <- training(split_vacant)
-test_vacant <- testing(split_vacant)
-
-# Permit
-split_permit <- initial_split(fire_panel_nogeo, strata = "permit", prop = 0.70)
-train_permit <- training(split_permit)
-test_permit <- testing(split_permit)
-
-# Transfer
-split_transfer <- initial_split(fire_panel_nogeo, strata = "transfer", prop = 0.70)
-train_transfer <- training(split_transfer)
-test_transfer <- testing(split_transfer)
-```
-
-```{r Feature Creation}
-# Feature Creation, Need to research, might be feture engineering???
-
-# Vacant
-model_rec_vacant <- recipe(outcome_vacant ~ ., data = train_vacant) %>%
-  update_role(address, new_role = "Address") %>%
-  step_other(address, threshold = 0.005) %>%
-  step_dummy(all_nominal(), -address) %>%
-  step_log(outcome_vacant, skip = TRUE) %>%
-  step_zv(all_predictors()) %>%
-  step_center(all_predictors(), -outcome_vacant) %>%
-  step_scale(all_predictors(), -outcome_vacant)
-  #step_ns(Latitude, Longitude, options = list(df = 4))
-
-# Permit
-model_rec_permit <- recipe(outcome_permit ~ ., data = train_permit) %>%
-  update_role(address, new_role = "Address") %>%
-  step_other(address, threshold = 0.005) %>%
-  step_dummy(all_nominal(), -address) %>%
-  step_log(outcome_permit, skip = TRUE) %>%
-  step_zv(all_predictors()) %>%
-  step_center(all_predictors(), -outcome_permit) %>%
-  step_scale(all_predictors(), -outcome_permit) %>%
-  #step_ns(Latitude, Longitude, options = list(df = 4))
-
-# Transfer
-model_rec_transfer <- recipe(outcome_transfer ~ ., data = train_transfer) %>%
-  update_role(address, new_role = "Address") %>%
-  step_other(address, threshold = 0.005) %>%
-  step_dummy(all_nominal(), -address) %>%
-  step_log(outcome_transfer, skip = TRUE) %>%
-  step_zv(all_predictors()) %>%
-  step_center(all_predictors(), -outcome_transfer) %>%
-  step_scale(all_predictors(), -outcome_transfer) %>%
-  #step_ns(Latitude, Longitude, options = list(df = 4))
-
-# See the data after all transformations
-glimpse(model_rec %>% prep() %>% juice())
-```
-
-QUESTION
-- is a spatial cross validation needed for this? time?
-```{r Model Specifications}
-#GLM
-glmnet_plan <- 
-  linear_reg() %>% 
-  set_args(penalty  = tune()) %>%
-  set_args(mixture  = tune()) %>%
-  set_engine("glmnet")
-
-#Gradient Boost
-XGB_plan <- boost_tree() %>%
-  set_args(mtry  = tune()) %>%
-  set_args(min_n = tune()) %>%
-  set_args(trees = 100) %>% 
-  set_engine("xgboost") %>% 
-  set_mode("regression")
-```
-
-```{r GLM Hyperparameter}
-# Hyperparameter grid for glmnet (penalization)
-glmnet_grid <- expand.grid(penalty = seq(0, 1, by = .25), 
-                           mixture = seq(0,1,0.25))
-
-xgb_grid <- expand.grid(mtry = c(3,5), 
-                        min_n = c(1,5))
-```
-
-```{r Creating Workflows}
-# GLM
-# Vacant
-glmnet_wf_vacant <-
-  workflow() %>% 
-  add_recipe(model_rec_vacant) %>% 
-  add_model(glmnet_plan)
-
-# Permit
-glmnet_wf_permit <-
-  workflow() %>% 
-  add_recipe(model_rec_permit) %>% 
-  add_model(glmnet_plan)
-
-# Transfer
-glmnet_wf_transfer <-
-  workflow() %>% 
-  add_recipe(model_rec_transfer) %>% 
-  add_model(glmnet_plan)
-
-# XGB
-# Vacant
-xgb_wf_vacant <-
-  workflow() %>% 
-  add_recipe(model_rec_vacant) %>% 
-  add_model(XGB_plan)
-
-# Permit
-xgb_wf_permit <-
-  workflow() %>% 
-  add_recipe(model_rec_permit) %>% 
-  add_model(XGB_plan)
-
-# Transfer
-xgb_wf_transfer <-
-  workflow() %>% 
-  add_recipe(model_rec_transfer) %>% 
-  add_model(XGB_plan)
-```
-
-```{r Fit Model To Workflow and Calculate Metrics}
-control <- control_resamples(save_pred = TRUE, verbose = TRUE)
-metrics <- metric_set(rmse, rsq, mape, smape)
-
-# GLM
-# Vacant
-glmnet_tuned_vacant <- glmnet_wf_vacant %>%
-  tune::tune_grid(.,
-                  resamples = cv_splits_geo,
-                  grid      = glmnet_grid,
-                  control   = control,
-                  metrics   = metrics)
-
-# Permit
-glmnet_tuned_permit <- glmnet_wf_permit %>%
-  tune::tune_grid(.,
-                  resamples = cv_splits_geo,
-                  grid      = glmnet_grid,
-                  control   = control,
-                  metrics   = metrics)
-
-# Transfer
-glmnet_tuned_transfer <- glmnet_tuned_transfer %>%
-  tune::tune_grid(.,
-                  resamples = cv_splits_geo,
-                  grid      = glmnet_grid,
-                  control   = control,
-                  metrics   = metrics)
-
-# XGB
-# Vacant
-xgb_tuned_vacant <- xgb_wf_vacant %>%
-  tune::tune_grid(.,
-                  resamples = cv_splits_geo,
-                  grid      = xgb_grid,
-                  control   = control,
-                  metrics   = metrics)
-
-# Permit
-xgb_tuned_permit <- xgb_wf_permit %>%
-  tune::tune_grid(.,
-                  resamples = cv_splits_geo,
-                  grid      = xgb_grid,
-                  control   = control,
-                  metrics   = metrics)
-
-# Transfer
-xgb_tuned_transfer <- xgb_wf_transfer %>%
-  tune::tune_grid(.,
-                  resamples = cv_splits_geo,
-                  grid      = xgb_grid,
-                  control   = control,
-                  metrics   = metrics)
-```
-
-```{r Metrics Across Grid}
-# GLM
-autoplot(glmnet_tuned_vacant) # Vacant
-autoplot(glmnet_tuned_permit) # Permit
-autoplot(glmnet_tuned_transfer) # Transfer
-
-collect_metrics(glmnet_tuned_vacant) # Vacant
-collect_metrics(glmnet_tuned_permit) # Permit
-collect_metrics(glmnet_tuned_transfer) # Transfer
-
-show_best(glmnet_tuned_vacant, metric = "rsq", n = 15) # Vacant - 'Best' by some metric and margin 
-show_best(glmnet_tuned_permit, metric = "rsq", n = 15) # Permit - 'Best' by some metric and margin 
-show_best(glmnet_tuned_transfer, metric = "rsq", n = 15) # Transfer - 'Best' by some metric and margin 
-
-glmnet_best_params_vacant <- select_best(glmnet_tuned_vacant, metric = "rmse")
-glmnet_best_params_permit <- select_best(glmnet_tuned_permit, metric = "rmse")
-glmnet_best_params_transfer <- select_best(glmnet_tuned_transfer, metric = "rmse")
-
-# XGB
-autoplot(xgb_tuned_vacant) # Vacant
-autoplot(xgb_tuned_permit) # Permit
-autoplot(xgb_tuned_transfer) # Transfer
-
-collect_metrics(xgb_tuned_vacant) # Vacant
-collect_metrics(xgb_tuned_permit) # Permit
-collect_metrics(xgb_tuned_transfer) # Transfer
-
-show_best(xgb_tuned_vacant, metric = "rsq", n = 15) # Vacant - 'Best' by some metric and margin 
-show_best(xgb_tuned_permit, metric = "rsq", n = 15) # Permit - 'Best' by some metric and margin 
-show_best(xgb_tuned_transfer, metric = "rsq", n = 15) # Transfer - 'Best' by some metric and margin 
-
-xgb_best_params_vacant <- select_best(xgb_tuned_vacant, metric = "rmse"   )
-xgb_best_params_permit <- select_best(xgb_tuned_permit, metric = "rmse"   )
-xgb_best_params_transfer <- select_best(xgb_tuned_transfer, metric = "rmse"   )
-```
-
-```{r Final Workflow}
-# GLM
-glmnet_best_wf_vacant <- finalize_workflow(glmnet_wf_vacant, glmnet_best_params_vacant) # Vacant
-glmnet_best_wf_permit <- finalize_workflow(glmnet_wf_permit, glmnet_best_params_permit) # Permit
-glmnet_best_wf_transfer <- finalize_workflow(glmnet_wf_transfer, glmnet_best_params_transfer) # Transfer
-
-# XGB
-xgb_best_wf_vacant <- finalize_workflow(xgb_wf_vacant, xgb_best_params_vacant) # Vacant
-xgb_best_wf_permit <- finalize_workflow(xgb_wf_permit, xgb_best_params_permit) # Permit
-xgb_best_wf_transfer <- finalize_workflow(xgb_wf_transfer, xgb_best_params_transfer) # Transfer
-```
-
-```{r}
-# last_fit() emulates the process where, after determining the best model, the final fit on the entire training set is needed and is then evaluated on the test set.
-
-glmnet_val_fit_geo <- glmnet_best_wf %>% 
-  last_fit(split     = data_split,
-           control   = control,
-           metrics   = metrics)
-
-xgb_val_fit_geo <- xgb_best_wf %>% 
-  last_fit(split     = data_split,
-           control   = control,
-           metrics   = metrics)
-```
-
-```{r}
-#Variables
-
-# - OPA Dataset
-# -- Building code description
-# -- Total livable area (square footage you would see in listing) [H - M - L]
-# -- Market value [H - M - L]
-# -- Quality grade
-# -- Number of stories (might be in BCD)
-# -- Interior condition
-# -- Stories
-# -- Number of bedrooms
-# -- Number of bathroom
-# -- Sale price
-
-# - Fire Dataset
-# -- Fire severity
-# -- Neighborhoods
-
-# - Zillow data
-# -- Occurrence of sales 
-
-#Feature engineer
-# - Spatial lag
-# - Season (BIG MAYBE)
-# -- Total livable area (square footage you would see in listing) [H - M - L]
-# -- Market value [H - M - L]  (< $250,000 = Low, $250,001-$500,000 = Medium, $500,001 = High)
-# -- Number of bedrooms
-# -- Number of bathroom
-# -- Sale price
-
-
-```
-
-# GLM Models
-### Vacant
-- Unemployment
-- Crime
-```{r Vacant}
-model_vacant_1 <- glm(vacant ~ severity_index + total_livable_area + resident_type + neighborhood + market_value + grade + 
-                        redevelopment_area,
-                  family="binomial" (link="logit"), data = train_vacant)
-
-model_vacant_2 <- glm(vacant ~ severity_index + total_livable_area + market_value + resident_type,
-                  family="binomial" (link="logit"), data = train_vacant) 
-
-model_vacant_3 <- glm(vacant ~ severity_index + total_livable_area + mkt_value + resident_type,
-                  family="binomial" (link="logit"), data = train_vacant) 
-
-model_vacant_4 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + ,
-                  family="binomial" (link="logit"), data = train_vacant) 
-
-model_vacant_5 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income,
-                  family="binomial" (link="logit"), data = train_vacant) 
-
-model_vacant_6 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income + white + black + AIAN + asian + NHPI 
-                      + other + multi + hispanic,
-                  family="binomial" (link="logit"), data = train_vacant) 
-
-model_vacant_7 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income + asian  
-                      + other + multi + mSinceFire,
-                  family="binomial" (link="logit"), data = train_vacant) # Best model so far
-
-model_vacant_8 <- glm(vacant ~ severity_index + area + mkt_value + resident_type + income_level + asian  
-                      + other + multi + mSinceFire,
-                  family="binomial" (link="logit"), data = train_vacant) 
-
-summary(model_vacant_8)
-```
-
-```{r}
-classProbs <- predict(model_vacant_8, train_vacant, type="response")
-hist(classProbs)
-
-testProbs <- data.frame(Outcome = as.factor(test_vacant$vacant),
-                        Probs = predict(model_vacant_8, test_vacant, type= "response"))
-testProbs <-
-  testProbs %>%
-  na.omit()
-
-palette2 <- c("#981FAC","#FF006A")
-
-library(plotROC)
-library(pROC)
-
-ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
-  geom_density() +
-  facet_grid(Outcome ~ .) +
-  scale_fill_manual(values = palette2) +
-  labs(x = "Credit", y = "Density of probabilities",
-       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
-  theme(strip.text.x = element_text(size = 18),
-        legend.position = "none")
-
-ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
-  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
-  style_roc(theme = theme_grey) +
-  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
-  labs(title = "Figure 5: ROC Curve - Tax Credit")
-
-pROC::auc(testProbs$Outcome, testProbs$Probs) 
-# Model 2 - AUC: .69 
-# Model 3 - AUC: .68 
-# Model 4 - AUC: .69 
-# Model 5 - AUC: .70
-# Model 6 - AUC: .72
-# Model 7 - AUC: .73
-# Model 8 - AUC: .73
-
-testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
-caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
-                       data = as.factor(testProbs$Probs), 
-                       positive = "1") 
-# Model 2 - Accuracy: .57 
-# Model 3 - Accuracy: .57 
-# Model 4 - Accuracy: .56 
-# Model 5 - Accuracy: .59 
-# Model 6 - Accuracy: .60 
-# Model 7 - Accuracy: .63 
-# Model 8 - Accuracy: .63 
-
-```
-
-### Permit
-- Distance to Parks
-- Distance to Schools
-- Distance to Transit
-- Distance to Commercial Corridors
-- Business Licenses
-- Redevelopment Areas
-```{r Permit}
-model_permit_1 <- glm(permit ~ severity_index + mkt_value + sale_value + number_of_bedrooms + number_of_bathrooms + number_stories + interior_condition + year_built + exterior_condition + fireplaces + grade + fuel_type + topo + electric_heater + air_central + fireplace + mSinceFire + cat_code + resident_type + income + age + white + black + AIAN + asian + NHPI + other + multi + hispanic + poverty + value_sqft + income_level,
-                  family="binomial" (link="logit"), data = train_permit) 
-
-model_permit_2 <- glm(permit ~ severity_index + exterior_condition + air_central + 
-                        cat_code + resident_type + poverty + value_sqft + income_level ,
-                  family="binomial" (link="logit"), data = train_permit) # Best model so far
-
-summary(model_permit_1)
-```
-
-```{r}
-classProbs <- predict(model_permit_1, train_permit, type="response")
-hist(classProbs)
-
-testProbs <- data.frame(Outcome = as.factor(test_permit$permit),
-                        Probs = predict(model_permit_1, test_permit, type= "response"))
-testProbs <-
-  testProbs %>%
-  na.omit()
-
-palette2 <- c("#981FAC","#FF006A")
-
-library(plotROC)
-library(pROC)
-
-ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
-  geom_density() +
-  facet_grid(Outcome ~ .) +
-  scale_fill_manual(values = palette2) +
-  labs(x = "Credit", y = "Density of probabilities",
-       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
-  theme(strip.text.x = element_text(size = 18),
-        legend.position = "none")
-
-ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
-  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
-  style_roc(theme = theme_grey) +
-  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
-  labs(title = "Figure 5: ROC Curve - Tax Credit")
-
-pROC::auc(testProbs$Outcome, testProbs$Probs) 
-
-testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
-caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
-                       data = as.factor(testProbs$Probs), 
-                       positive = "1") 
-
-
-```
-
-### Transfer -- 
-- House Features
-- Distance to Schools
-- Distance to Transit
-- Demographic (is the area changing?)
-- Income (is the area changing?)
-```{r Transfer}
-model_transfer_1 <- glm(transfer ~ severity_index + exterior_condition + air_central + 
-                        cat_code + resident_type + poverty + value_sqft + income_level,
-                  family="binomial" (link="logit"), data = train_transfer)
-```
-
-```{r}
-classProbs <- predict(model_transfer_1, train_vacant, type="response")
-hist(classProbs)
-
-testProbs <- data.frame(Outcome = as.factor(test_vacant$vacant),
-                        Probs = predict(model_permit_2, test_vacant, type= "response"))
-testProbs <-
-  testProbs %>%
-  na.omit()
-
-palette2 <- c("#981FAC","#FF006A")
-
-library(plotROC)
-library(pROC)
-
-ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) + 
-  geom_density() +
-  facet_grid(Outcome ~ .) +
-  scale_fill_manual(values = palette2) +
-  labs(x = "Credit", y = "Density of probabilities",
-       title = "Figure 4: Distribution of predicted probabilities by observed outcome") +
-  theme(strip.text.x = element_text(size = 18),
-        legend.position = "none")
-
-ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
-  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
-  style_roc(theme = theme_grey) +
-  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
-  labs(title = "Figure 5: ROC Curve - Tax Credit")
-
-pROC::auc(testProbs$Outcome, testProbs$Probs) 
-
-
-testProbs$Probs  = ifelse(testProbs$Probs > .1 ,1,0)
-caret::confusionMatrix(reference = as.factor(testProbs$Outcome), 
-                       data = as.factor(testProbs$Probs), 
-                       positive = "1") 
-
-
-```
-
-To-Do:
-- Friday: 
----- Myron (nearest neighbor) and Kendra (demographics, income, crime, unemployment) feature engineer
----- Finish modeling. Do not touch vacancy, try to get permit/transfer to at least 50% accuracy
-
-- Saturday: 
----- (AM) Myron writes modeling, both work on plots and maps
----- (PM) Kendra works on presentation 
-
-- Sunday and Monday: 
----- Final touches
-
 
 
