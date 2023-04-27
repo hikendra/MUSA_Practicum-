@@ -157,15 +157,7 @@ Covariates:
 
 ```{r Box Set Up, message=FALSE, warning=FALSE}
 
-## INSERT BOX WORKFLOW HERE ##
-box_auth(client_id = "7olfapklfw3aflgpeb2kopxj1jceogg0", 
-         client_secret = "xMUYd0SngtrtzGC92cZKon2jd6yyvM9d")
 
-box_setwd(186732420366)
-
-structureFire <- box_read_excel(1093000179542)
-
-g(structureFire)
 
 
 ```
@@ -647,6 +639,8 @@ Similarly, vacancies that linger after 1 year signal slow recovery. Here are two
 
 ```{r}
 
+palette5_fire <- c("#F1C82B", "#E19825", "#D55816", "#D55816", "#401307")
+
 #Divide vacancies by before 1 and after 1 year
 
 panel_pm_4YForward%>%
@@ -658,9 +652,9 @@ panel_pm_4YForward%>%
   filter(value > 0)%>%
   ggplot()+
     geom_sf(data=acsTractsPHL.2020, aes(fill=q5(Perc_Vacant)), color=NA)+
-        scale_fill_manual(values=palette5_vac, labels=qBr(acsTractsPHL.2020, "Perc_Vacant"))+
+        scale_fill_manual(values=palette5_sat, labels=qBr(acsTractsPHL.2020, "Perc_Vacant"))+
     geom_sf(aes(color=fire), size=1)+
-    scale_color_manual(values= c("#20B1AE", "#D55816"))+
+    scale_color_manual(values= c("#FFFFFF", "#20B1AE"))+
     facet_wrap(~lingering, nrow=1)+
     labs(title = "Vacancies in Properties With Fires, by Years After The Fire") +
     mapTheme()
