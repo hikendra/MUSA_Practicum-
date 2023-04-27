@@ -33,7 +33,7 @@ const descriptionArray = {
     "mid-low-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
     "mid-low-mid": "This property could either see recovery within two years or be left vacant for a longer term given no intervention. Moderate amounts of assistance could help this property recover quicker.",
     "mid-low-high": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "mid-mid-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
+    "mid-mid-low": "This property has a lower chance of being repaired.",
     "mid-mid-mid": "This property could either be repaired by the owner or sold to an investor to repair. It may take a while though, and has some risk of staying vacant for a while.",
     "mid-mid-high": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
     "mid-high-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
