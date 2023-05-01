@@ -2,6 +2,7 @@
 import { initMap } from "./map.js";
 import { readCSV, readNHoodCSV } from "./inventory.js";
 import { addMarker, createPopup } from "./popup.js";
+import { showToast, initToast } from "./toast.js"
 
 let app = {
     currentAddress: null,
@@ -39,8 +40,16 @@ function getSingleAddress(data){
     let singleAddress = data.filter(location => {
         return location.address.toUpperCase().includes(text.toUpperCase());
     })
-    console.log(singleAddress);
-    flyToAddress(singleAddress[0]);
+    if (singleAddress.length == 1) {
+        flyToAddress(singleAddress[0]);
+    } else if (singleAddress.length > 1) {
+        console.log("Please refine your search")
+        showToast("Please refine your search");
+        return;
+    } else if (singleAddress.length == 0) {
+        console.log("No Address Found")
+        showToast("No address found");
+    } ;
 }
 
 async function getAddressData() {
@@ -58,7 +67,14 @@ async function getAddressData() {
         //load csv by that address
         currentAddressData = readNHoodCSV(nhoodKey[0].neighborhood, getSingleAddress);
         //filter to just that address
-    } 
+    } else if (nhoodKey.length > 1) {
+        console.log("Please refine your search")
+        showToast("Please refine your search");
+        return;
+    } else if (nhoodKey.length == 0) {
+        console.log("No Address Found")
+        showToast("No address found");
+    } ;
 }
 
 function flyToWithOffset(map, latlng, zoom) {
@@ -83,6 +99,16 @@ function flyToAddress(location) {
 
 spreadInput.addEventListener("input", updateSpread)
 searchBtn.addEventListener("click", getAddressData);
+
+addressInput.addEventListener('keypress', function(event) {
+  // Check if the 'Enter' key was pressed
+  if (event.keyCode === 13) {
+    // Call your function here
+    getAddressData();
+  }
+});
+
+initToast();
 
 window.markers = markers;
 window.key = key;

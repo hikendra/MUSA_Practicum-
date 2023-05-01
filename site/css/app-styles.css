@@ -197,6 +197,36 @@ hr {
   margin-bottom: 1.3em  !important;
 }
 
+.toast {
+  height: 3rem;
+  width: 280px;
+  position: absolute;
+  top: 460px;
+  left: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #D55816;
+  color: white;
+  font-family: urw-form,sans-serif;
+  font-weight: 300;
+  font-style: normal;
+  font-size: 1em;
+  border-radius: 0.5rem;
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 1s ease-in;
+}
+
+.toasting-out {
+  opacity: 0;
+}
+
+.hidden {
+  display: none;
+}
+
 /*
 
 .low-v {
