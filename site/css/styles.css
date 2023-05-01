@@ -73,11 +73,9 @@ a :hover {
 .noise {
     width: 100%;
     height: 100vh;
-    z-index: -1;
     background: 
-        linear-gradient(to bottom, #D55816, #F0EBDE), 
-        url(https://grainy-gradients.vercel.app/noise.svg);
-    filter: contrast(100%); 
+        linear-gradient(180deg, #D55816 0%, transparent 40%, #F0EBDE 80%),
+        url(../images/noise.svg);
 }
 
 .overlay {
