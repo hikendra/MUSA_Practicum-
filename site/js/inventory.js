@@ -19,7 +19,7 @@ function readCSV(onSuccess, onFailure) {
 }
 
 function readExclusion(onSuccess, onFailure) {
-    fetch('./data/excluded_addresses.csv')
+    fetch('./excluded_addresses.csv')
     .then(resp => {
         if (resp.status === 200){
             return resp.text();
