@@ -18,6 +18,23 @@ function readCSV(onSuccess, onFailure) {
     .then(onSuccess);
 }
 
+function readExclusion(onSuccess, onFailure) {
+    fetch('./data/excluded_addresses.csv')
+    .then(resp => {
+        if (resp.status === 200){
+            return resp.text();
+        } else {
+            alert('Failure to Load Data');
+            if (onFailure) {onFailure()}
+        }
+    })
+    .then(text => {
+        const data = Papa.parse(text, { header: true });
+        return data.data;
+    })
+    .then(onSuccess);
+}
+
 function readNHoodCSV(nhood, onSuccess, onFailure) {
     fetch(`./data/predictionsByNhood/${nhood}.csv`)
     .then(resp => {
@@ -36,5 +53,6 @@ function readNHoodCSV(nhood, onSuccess, onFailure) {
 
 export {
     readCSV,
+    readExclusion,
     readNHoodCSV
 };

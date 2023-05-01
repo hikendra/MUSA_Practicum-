@@ -25,29 +25,29 @@ const descriptionArray = {
     "low-low-mid": "This property may be repaired by the owner with little intervention.",
     "low-low-high": "This property will likely be repaired by the owner and will recover with little intervention.",
     "low-mid-low": "This property has a slightly elevated risk of being sold because of the fire. If the fire was small enough, the property may be repaired without a permit.",
-    "low-mid-mid": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "low-mid-high": "This property will recover quickly, but may be sold to an investor rather than be kept by the owner. This sale could happen before or after repairs depending on the nature of the fire and the insurance of the individual.",
-    "low-high-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "low-high-mid": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
+    "low-mid-mid": "This property may be repaired by the owner with little intervention. If the damage was significant and the owner lacks resources for repair, it may be sold and repaired instead.",
+    "low-mid-high": "This property will likely recover quickly, but may be sold to an investor rather than be kept by the owner. This sale could happen before or after repairs depending on the fire severity and the owner's resources.",
+    "low-high-low": "This property is more likely than others to be sold within two years, but will probably not report major repairs or vacancy.",
+    "low-high-mid": "This property is more likely than others to be sold within two years, either repaired beforehand or after depending on the owner's resources.",
     "low-high-high": "This property will likely be sold and repaired by an investor to meet the evident demand of the area, or repaired and sold as a benefit to the owner.",
-    "mid-low-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
+    "mid-low-low": "This property may sit vacant for a while after the fire, unless the owner has the resources to repair it. If the fire was severe, intervention may increase the likelihood of repairs and owners returning.",
     "mid-low-mid": "This property could either see recovery within two years or be left vacant for a longer term given no intervention. Moderate amounts of assistance could help this property recover quicker.",
-    "mid-low-high": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "mid-mid-low": "This property has a lower chance of being repaired.",
+    "mid-low-high": "This property may sit vacant for a while after the fire, but will likely be repaired by the owner with little intervention.",
+    "mid-mid-low": "This property has a lower chance of being repaired, so it may sit vacant and be sold to an investor.",
     "mid-mid-mid": "This property could either be repaired by the owner or sold to an investor to repair. It may take a while though, and has some risk of staying vacant for a while.",
-    "mid-mid-high": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "mid-high-low": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
+    "mid-mid-high": "This property will likely be repaired. It could take a while though, increaasing its risk of vacancy or sale to an investor.",
+    "mid-high-low": "This property is more likely than others to be sold, and may sit vacant until this happens.",
     "mid-high-mid": "This property has a high likelihood of being sold to an investor for repairs, but the repairs may take a while to happen. As such, it could sit vacant while development slowly happens.",
-    "mid-high-high": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
+    "mid-high-high": "This property is more likely than others to be sold, either before or after repairs depending on the owner's resources. It may sit vacant until this happens, especially if the owner intends to sell..",
     "high-low-low": "The high vacancy risk, combined with the low repair or sales likelihood, imply that this building is more likely than others to become a blighted property if there is no intervention. ",
-    "high-low-mid": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "high-low-high": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "high-mid-low": "The high vacancy risk implies that this building could stay vacant for a while if given no intervention. However, it may be sold within two years and repaired over the long term. This forecast could be due to latent development pressure in the area.",
-    "high-mid-mid": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "high-mid-high": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "high-high-low": "The high vacancy risk implies that this building could stay vacant for a while if given no intervention. However, it is likely to be sold within two years and repaired over the long term. This forecast could be due to latent development pressure in the area.",
-    "high-high-mid": "This property is likely to be vacant, sold, and repaired within two years of a fire.",
-    "high-high-high": "This property is likely to be vacant, sold, and repaired within two years of a fire."
+    "high-low-mid": "This property is likely sit vacant until repairs given no intervention, but the owner may repair it eventually.",
+    "high-low-high": "This property is likely sit vacant until repairs given no intervention, but the owner is likely to repair it eventually.",
+    "high-mid-low": "The high vacancy risk implies that this building could stay vacant for a while if given no intervention. However, it may be sold within two years and repaired over the long term.",
+    "high-mid-mid": "This property is more likely than others to be reported as vacant after a fire. It has a moderate chance of being repaired by the owner or an investor, but that process may take a while.",
+    "high-mid-high": "This property is more likely than others to be reported as vacant after a fire, but will likely be repaired by the owner or an investor. The process may take a while, depending on the owner's resources.",
+    "high-high-low": "The high vacancy risk implies that this building could stay vacant for a while if given no intervention. However, it is likely to be sold within two years and repaired over the long term.",
+    "high-high-mid": "This property is more likely than others to be reported vacant and sold, and has a moderate chance of being repaired quicky by an investor or the owner. If this is due to the fire's high severity, then the nature of the damage and the owner's resoures will determine the speed of recovery",
+    "high-high-high": "This property is more likely than others to be vacant, sold, and repaired within two years of a fire. If this is due to the fire's high severity, then the nature of the damage and the owner's resoures will determine the speed of recovery."
 }
 
 function zoomOut() {
@@ -63,7 +63,7 @@ function addMarker(lnglat, markerLayer){
 
 function getPrediction(info, outcome){
     //get type of variable from info
-    let column = `spread${document.getElementById("spread-select").value}_${outcome}`
+    let column = `spread${document.getElementById("spreadRange").value}_${outcome}`
     let prediction = info[column];
     return prediction;
 }
@@ -107,7 +107,7 @@ function getDescription(rep, sale, vac) {
 }
 
 function createPopup(info, lnglat, markerLayer){
-    let spread = document.getElementById("spread-select").value;
+    let spread = document.getElementById("spreadRange").value;
 
     //predictions
     let vac = labelPrediction(info, "vacant");

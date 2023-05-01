@@ -81,7 +81,6 @@ p {
     font-weight: 500;
     font-style: normal;
     font-size: 1.3em;
-    margin-top: 1.3em;
 }
 
 .body-text {
@@ -127,4 +126,52 @@ li {
     font-size: 1em;
     margin-top: 0;
     margin-bottom: 0.5em;
+}
+
+label {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 600;
+    font-style: normal;
+    font-size: 1em;
+    margin-top: 0;
+    color: #3A352F;
+}
+
+input {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1.33em;
+    margin-top: 0;
+}
+
+select {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1.33em;
+    margin-top: 0;
+}
+
+button {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1.33em;
+    margin-top: 0;
+}
+
+.footer-note {
+    font-family: 'work sans', sans-serif;
+    font-weight: 400;
+    font-size: 0.75em;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.footer {
+    font-family: 'work sans', sans-serif;
+    font-weight: 400;
+    font-size: 1em;
+    margin-bottom: 0;
 }

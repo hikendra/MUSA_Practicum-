@@ -1,6 +1,6 @@
 //Imports from other modules
 import { initMap } from "./map.js";
-import { readCSV, readNHoodCSV } from "./inventory.js";
+import { readCSV, readNHoodCSV, readExclusion } from "./inventory.js";
 import { addMarker, createPopup } from "./popup.js";
 import { showToast, initToast } from "./toast.js"
 
@@ -13,53 +13,64 @@ let map = initMap();
 let markers = L.layerGroup().addTo(map);
 let key = [];
 let currentAddressData = [];
+let exclusion = [];
+const colorSpread = ["#F1C82B", "#E19825", "#D55816", "#7B230B", "#401307"]
 
 //Load Data
 function onInventoryLoadSuccess(data) {
     key = data;
-    console.log(key);
 }
 
 readCSV(onInventoryLoadSuccess);
 
+//Load Exclusion Data
+function onExclusionLoadSuccess(data) {
+    exclusion = data;
+}
+
+readExclusion(onExclusionLoadSuccess);
+
 let addressInput = document.querySelector('#addressInput');
 let searchBtn = document.querySelector('#addressLoadButton');
-let spreadInput = document.querySelector('#spread-select')
+let spreadRange = document.querySelector('#spreadRange')
+let spreadLabel = document.querySelector('#spreadLabel')
 
-app.currentSpread = spreadInput.value;
+app.currentSpread = spreadRange.value;
 
-//Update the fire spread value whenever the dropdown is changed
-function updateSpread(){
-    app.currentSpread = spreadInput.value;
-    console.log(app.currentSpread);
+const spreadText = ["Limited to object of origin", "Limited to room of origin", "Limited to floor of origin", "Limited to building of origin", "Spread beyond the building"];
+
+function updateSpreadLabel(){
+    app.currentSpread = spreadRange.value;
+    spreadLabel.innerHTML = `Spread Level: ${app.currentSpread} <span style="background-color: ${colorSpread[app.currentSpread-1]}"> </span><br>${spreadText[app.currentSpread-1]}`;
 }
+
+updateSpreadLabel();
 
 function getSingleAddress(data){
     const text = addressInput.value;
-    console.log(data);
-    let singleAddress = data.filter(location => {
-        return location.address.toUpperCase().includes(text.toUpperCase());
+    const excludeCheck = exclusion.filter(addr => {
+        return addr.address.toUpperCase().includes(text.toUpperCase());
     })
-    if (singleAddress.length == 1) {
+    if (excludeCheck.length > 0) {
+        showToast("Sorry, address was excluded from our predictions.");
+    } else {
+        let singleAddress = data.filter(location => {
+            return location.address.toUpperCase().includes(text.toUpperCase());
+        })
         flyToAddress(singleAddress[0]);
-    } else if (singleAddress.length > 1) {
-        console.log("Please refine your search")
-        showToast("Please refine your search");
-        return;
-    } else if (singleAddress.length == 0) {
-        console.log("No Address Found")
-        showToast("No address found");
-    } ;
+    } 
 }
 
 async function getAddressData() {
     // search through the data for the input of addressInput,
     // return that array's data
     const text = addressInput.value;
+    const excludeCheck = exclusion.filter(addr => {
+        return addr.address.toUpperCase().includes(text.toUpperCase());
+    });
     let nhoodKey = key.filter(addr => {
         return addr.address.toUpperCase().includes(text.toUpperCase());
     })
-    console.log(nhoodKey);
     //Check for length, if greater than 0, return a warning that says "please refine your search"
     //If length is 0, then say "No Address Found"
     if (nhoodKey.length == 1) {
@@ -68,12 +79,13 @@ async function getAddressData() {
         currentAddressData = readNHoodCSV(nhoodKey[0].neighborhood, getSingleAddress);
         //filter to just that address
     } else if (nhoodKey.length > 1) {
-        console.log("Please refine your search")
-        showToast("Please refine your search");
-        return;
+        showToast("Please refine your search.");
     } else if (nhoodKey.length == 0) {
-        console.log("No Address Found")
-        showToast("No address found");
+        if (excludeCheck.length > 0) {
+            showToast("This address was excluded from our predictions due to its building type, or it's vacant land.");
+        } else {
+            showToast("No address found.");
+        }
     } ;
 }
 
@@ -97,7 +109,7 @@ function flyToAddress(location) {
     flyToWithOffset(map, lnglat, 18)
 }
 
-spreadInput.addEventListener("input", updateSpread)
+spreadRange.addEventListener("input", updateSpreadLabel)
 searchBtn.addEventListener("click", getAddressData);
 
 addressInput.addEventListener('keypress', function(event) {
@@ -115,3 +127,4 @@ window.key = key;
 window.addressInput = addressInput;
 window.app = app;
 window.map = map;
+window.exclusion = exclusion;

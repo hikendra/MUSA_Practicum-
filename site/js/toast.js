@@ -1,4 +1,5 @@
 const toastEl = document.getElementById('toast');
+const toastMessageEl = document.getElementById('toastMessage');
 
 function initToast() {
   toastEl.addEventListener('transitionend', () => {
@@ -8,7 +9,7 @@ function initToast() {
 }
 
 function showToast(message, otherClasses) {
-  toastEl.innerHTML = message;
+  toastMessageEl.innerHTML = message;
   toastEl.className = 'toast ' + (otherClasses || '');
   setTimeout(() => {
     toastEl.classList.add('toasting-out');

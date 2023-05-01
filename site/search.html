@@ -39,37 +39,39 @@
 
     <div class="search-container" id="searchContainer">
         <h4 class="control-title">Recovery Forecast</h4>
-        <p class="">Search any single address below to see the recovery forecast, and adjust the forecast by fire severity.</p>
+        <p class="">Search any single address in Philadelpiha County to see the recovery forecast, and adjust the forecast by fire severity.</p>
         <div class="control">
             <div class="input-group">
                 <label for="addressInput">Enter An Address:</label>
-                <div>
-                    <input id="addressInput" type="text" class="address-input" placeholder="Enter An Address" size=35>
-                </div>
+                <span class="search-span">
+                    <input id="addressInput" type="search" class="address-input" placeholder="Enter An Address">
+                </span>
             </div>
+            <p class="footer">Abbreviate directions like "South" as "S" and names like "Street" as "St".</p>
             <div class="lists-group" >
                 <div id="addressSearchList" class="list-group"></div>
             </div>
         </div>  
-        
+
         <div class="control">
-            <label for="spread-select">Select Fire Spread:</label>
-            <div class="dropdown">
-                <select name="spread" id="spread-select">
-                    <!--<option value="">--Please choose an option--</option>-->
-                    <option value="1">1 - Object of Origin Only</option>
-                    <option value="2">2 - Spread to Room</option>
-                    <option value="3">3 - Spread to Floor</option>
-                    <option value="4">4 - Spread to Multiple Floors</option>
-                    <option value="5">5 - Spread to Other Buildings</option>
-                </select>
-            </div>
+            <label for="spread-range">Select Fire Spread:</label>
+            <input type="range" list="markers" class="dropdown" id="spreadRange" min="1" max="5">
+                <datalist id="markers">
+                    <option value="1" label="1"></option>
+                    <option value="2" label="2"></option>
+                    <option value="3" label="3"></option>
+                    <option value="4" label="4"></option>
+                    <option value="5" label="5"></option>
+                </datalist>
+            </input>
+            <p id="spreadLabel">Spread Level: 1 <span style="background-color: #F1C82B"></span><br>Limited to Object of Origin</p>
         </div>
+        
         <div class="control">
             <button class="control-button" id="addressLoadButton" type="button">Search</button>
         </div>
     </div>
-    <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast hidden"><div id="toastMessage"></div></div>
 
     <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
     <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>

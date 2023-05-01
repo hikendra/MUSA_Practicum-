@@ -40,7 +40,13 @@
     display:flex;
     justify-content: center;
     flex-direction: column;
+    align-items: stretch;
 }
+
+.address-input {
+  width: 100%;
+}
+
 
 .control-button {
   background-color: #20B1AE;
@@ -104,11 +110,13 @@
   }
   }
 
-.leaflet-control-container { position: absolute; right: 56px } 
+
+.leaflet-control-container { position: absolute; right: 56px; top: 70px;} 
 
 .leaflet-popup-content p{
     margin: unset;
 }
+
 
 .popup-content-container{
     width: 300px;
@@ -172,14 +180,13 @@ hr {
   margin: 0 0 10px;
 }
 
-.legend div span {
+#spreadLabel span {
   border-radius: 50%;
   display: inline-block;
   height: 10px;
   margin-right: 5px;
   width: 10px;
 }
-
 
 .pred-label {
   font-family: urw-form,sans-serif;
@@ -198,16 +205,15 @@ hr {
 }
 
 .toast {
-  height: 3rem;
   width: 280px;
   position: absolute;
-  top: 460px;
+  top: 580px;
   left: 1rem;
   right: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #D55816;
+  background-color: #7B230B;
   color: white;
   font-family: urw-form,sans-serif;
   font-weight: 300;
@@ -217,6 +223,7 @@ hr {
   z-index: 2000;
   opacity: 1;
   transition: opacity 1s ease-in;
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
 }
 
 .toasting-out {
@@ -225,6 +232,10 @@ hr {
 
 .hidden {
   display: none;
+}
+
+#toastMessage {
+  margin: 20px;
 }
 
 /*
