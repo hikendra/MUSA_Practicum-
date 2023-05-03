@@ -157,9 +157,6 @@ Covariates:
 
 ```{r Box Set Up, message=FALSE, warning=FALSE}
 
-
-
-
 ```
 
 ### Cleaning
@@ -194,6 +191,12 @@ dat_boolean <- dat%>%
   st_drop_geometry%>%
   mutate(fire = 1)%>%
   dplyr::select(address, fire)
+
+taney <- dat %>% filter(grepl("N TANEY", address))
+
+rowhomes <- opa_ps %>% filter(grepl("ROW", building_code_description))
+
+nrow(rowhomes)/nrow(opa_dat)
 
 ```
 
@@ -564,6 +567,9 @@ panel_pm_4YForward%>%
   
 
 ```
+
+
+
 ```{r Vacancy Clusters of reporting time}
 
 #Filter results between 0 and 1 year, 1.25 and 2 years, 2.25 and 3 years, 3.25 and 4 years
@@ -591,6 +597,9 @@ Assuming that permits that happen after a year have been delayed and are not des
 
 #Divide permits by before 1 and after 1 year
 
+delayed.labs <- c("0-1 Years", "1-4 Years")
+names(delayed.labs) <- c(0, 1)
+
 panel_pm_4YForward%>%
   filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
   filter(!(n_permits == 0))%>%
@@ -602,7 +611,7 @@ panel_pm_4YForward%>%
     geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
     geom_sf(aes(color=fire), size=0.75)+
     scale_color_manual(values= c("#3f3128", "#20b1ae"))+
-    facet_wrap(~delayed, nrow=1)+
+    facet_wrap(~delayed, nrow=1, labeller = labeller(delayed = delayed.labs))+
     labs(title = "Permits in Properties With Fires, by Years After The Fire") +
     mapTheme()
 
@@ -631,22 +640,24 @@ panel_pm_4YForward%>%
     labs(title = "Percentage of properties with permits 1 year after a fire") +
     mapTheme()
 
-#g(panel_pm_4YForward)
 
 ```
 
-Similarly, vacancies that linger after 1 year signal slow recovery. Here are two maps that show the spatial distribution, either by points or summarized by neighborhood.
+Fire stricken properties appear to have more vacancy reports in areas of already-high vacancy rates, as defined by ACS Data for 2020. Vacant properties tend to linger in these areas as well. The two maps below divide the vacancy reports for the matched-set between reports within 1 year of the fire and reports between 1 year and 4 years after the fire. The blue dots appear to consolidate into those darker, higher-vacancy areas.  
 
-```{r}
+```{r vacancy clusters}
 
 palette5_fire <- c("#F1C82B", "#E19825", "#D55816", "#D55816", "#401307")
 
 #Divide vacancies by before 1 and after 1 year
 
+lingering <- c("0-1 Years", "1-4 Years")
+names(lingering) <- c(0, 1)
+
 panel_pm_4YForward%>%
   filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
   filter(!(n_Vacant == 0))%>%
-  mutate(lingering = ifelse(ySinceFire <= 1.5, 0, 1))%>%
+  mutate(lingering = ifelse(ySinceFire <= 1, 0, 1))%>%
   dplyr::select(n_Vacant, fire, lingering)%>%
   gather(Variable, value, -lingering, -fire, -geometry)%>%
   filter(value > 0)%>%
@@ -655,13 +666,17 @@ panel_pm_4YForward%>%
         scale_fill_manual(values=palette5_sat, labels=qBr(acsTractsPHL.2020, "Perc_Vacant"))+
     geom_sf(aes(color=fire), size=1)+
     scale_color_manual(values= c("#FFFFFF", "#20B1AE"))+
-    facet_wrap(~lingering, nrow=1)+
-    labs(title = "Vacancies in Properties With Fires, by Years After The Fire") +
+    facet_wrap(~lingering, nrow=1, labeller = labeller(lingering= lingering))+
+    labs(title = "Matched-Set Vacancy Reports Cluster in Areas of High Vacancy",
+         subtitle = "Philadelphia County, Fires from 2013-2018, Vacancy Reports from 2013-2022",
+         credit = "Source: US ACS and Philadelphia Fire Department") +
     mapTheme()
 
 ```
 
-```{r}
+This map shows which neighborhoods have the highest rate of vacancies that persist over a year after the fire, which signals obstacles to recovery.
+
+```{r lingering vacancies}
 
 panel_pm_4YForward%>%
   filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
@@ -690,7 +705,9 @@ panel_pm_4YForward%>%
 
 ## Are investors buying fire-stricken properties at a higher rate than normal properties?
 
-```{r}
+With our case study featuring two examples of investor-purchased homes, we were curious if this was a larger trend. In short, the transfer of properties between investors and homeowners is a minority of property transfers as a whole, but fires do affect sales in these categories in two different ways. 
+
+```{r Importing sale transfer data}
 
 transfers <- read_csv("../Data/OpenDataPhilly-transfers.csv")
 
@@ -704,7 +721,9 @@ transfers_data <- transfers%>%
 
 ```
 
-```{r}
+We're defining investors as those who own above 5 properties in the OPA dataset and those that have 'LLC', 'LP', 'REO', 'Investments', 'Homes', 'Trust', 'Corp', 'Inc' in their name. From this criteria, we created a list of investors to find in the matched set.
+
+```{r Creating an Investor List}
 
 toMatch <- c('LLC', 'LP', 'REO', 'Investments', 'Homes', 'Trust', 'Corp', 'Inc')
 
@@ -716,7 +735,7 @@ investors_opa <- opa_dat%>%
   st_drop_geometry()%>%
   dplyr::select(owner_1)%>%
   group_by(owner_1)%>%
-  filter(n()>1 & n()<100)
+  filter(n()>5)
 
 investors_list_opa <- unique(investors_opa)
 
@@ -735,48 +754,25 @@ panel_pm_4Y_sales <- panel_pm_4Y%>%
 
 ```
 
-
 ### Homeowner to investor, investor to homeowner
 
-```{r}
+Here’s the same type of graph as the property sales, but counting sales that we classify as “homeowner-to-investor” based on their name and how many properties they own. The rate of homeowner-to-investor sales is steadily increasing over time, but fires are associated with a nearly 100% increase in the first year, with the trend maintaining over time.
 
-
-panel_pm_4Y_sales%>%
-  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
-  st_drop_geometry%>%
-  ungroup()%>%
-  filter(!(n_transfers == 0))%>%
-  dplyr::select(ySinceFire, fire, investorToHomeowner)%>%
-  gather(Variable, value, -ySinceFire, -fire)%>%
-  filter(value == TRUE)%>%
-    count(ySinceFire, fire, Variable)%>%
-  ggplot(aes(x=ySinceFire, y=n, fill=fire))+
-    geom_col(position="dodge", just = 0.5)+
-      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
-       subtitle="Philadelphia County, 2013-2018, By Quarter")+
-      geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
-  facet_wrap(~Variable) + 
-  xlab("Years Since Fire")+
-  ylab("Count of Outcomes")+
-  scale_x_continuous(breaks = c(-4, -3, -2, -1, 0, 1, 2, 3, 4))+
-    theme(panel.background = element_rect(fill = "#f3efe0"))+
-  scale_fill_manual(values = c("#b18e6f", "#b9cfcf"))+
-  scale_color_manual(values = c("#3f3128", "#20b1ae"))+
-  geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
+```{r homeowners to investors}
 
 panel_pm_4Y_sales%>%
   filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
   st_drop_geometry%>%
   ungroup()%>%
   filter(!(n_transfers == 0))%>%
-  dplyr::select(ySinceFire, fire, investorToHomeowner)%>%
+  dplyr::select(ySinceFire, fire, homeownerToInvestor)%>%
   gather(Variable, value, -ySinceFire, -fire)%>%
   filter(value == TRUE)%>%
     count(ySinceFire, fire, Variable)%>%
   ggplot(aes(x=ySinceFire, y=n, fill=fire))+
     geom_col(position="dodge", just = 0.5)+
-      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
-       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      labs(title="Property Transfers: Sales from Homeowners To Investors by Time to Fire",
+       subtitle="Philadelphia County, Fires in 2013-2018, Sales in 2009-2022, By Quarter")+
       geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
   facet_wrap(~Variable) + 
   xlab("Years Since Fire")+
@@ -789,21 +785,23 @@ panel_pm_4Y_sales%>%
 
 ```
 
-```{r}
+Conversely, if we look at investor-to-homeowner sales, there’s a lag time where investor-owned properties with fires are sold at a lower rate, but then investor sales pick up after six months. This may indicate a flip-sale trend,
+
+```{r investors to homeowners}
 
 panel_pm_4Y_sales%>%
   filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
   st_drop_geometry%>%
   ungroup()%>%
   filter(!(n_transfers == 0))%>%
-  dplyr::select(ySinceFire, fire, investorBuy)%>%
+  dplyr::select(ySinceFire, fire, investorToHomeowner)%>%
   gather(Variable, value, -ySinceFire, -fire)%>%
   filter(value == TRUE)%>%
     count(ySinceFire, fire, Variable)%>%
   ggplot(aes(x=ySinceFire, y=n, fill=fire))+
     geom_col(position="dodge", just = 0.5)+
-      labs(title="Permits, Vacancies, and Sales By Time From Fire, Propensity-Matched Set",
-       subtitle="Philadelphia County, 2013-2018, By Quarter")+
+      labs(title="Property Transfers: Sales from Investors To Homeowners by Time to Fire",
+       subtitle="Philadelphia County, Fires in 2013-2018, Sales in 2009-2022, By Quarter")+
       geom_smooth(se=FALSE, aes(color = fire, group = paste(fire, (ySinceFire >= 0))), size = 1.5)+
   facet_wrap(~Variable) + 
   xlab("Years Since Fire")+
@@ -814,8 +812,9 @@ panel_pm_4Y_sales%>%
   scale_color_manual(values = c("#3f3128", "#20b1ae"))+
   geom_vline(xintercept = 0, color = "#d55816", size = 1, linetype = "dashed")
 
-
 ```
+
+
 
 
 
