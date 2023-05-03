@@ -591,9 +591,17 @@ panel_pm_4YForward%>%
 
 ```
 
-Assuming that permits that happen after a year have been delayed and are not desirable, we can order neighborhoods and points by this value. See below:
+## Where does recovery happen fastest or slowest?
+
+We see that with both vacancies and permits, the falling likelihood of reports between 6 and 18 months levels off to a sustained, slowly decreasing amount. Perhaps these are different trends, in that permits and vacancies that happen within the first year are a natural part of fire recovery, but reports after that point indicate there are obstacles to recovery. [One fire repair service](https://jenkinsrestorations.com/7-things-to-do-after-a-house-fire/#toggle-id-4-closed) lists "large fire" recovery as taking "a significant amount of time, typically at minimum several weeks, with the likelihood of it taking several months for repairs." [Others](https://exactrecon.com/how-long-does-it-take-to-repair-a-house-after-a-fire/) have similar timelines. 
+
+Knowing that that permits have been delayed from the usual recovery timeline, we were curious if there were spatial or demographic differences among repair speed. 
+
+We mapped these permit reports across Philadelphia and separated the data by whether it occurred within a year or between 1-4 years after the fire. 
 
 ```{r Vacancy Clusters of reporting time}
+
+palette5_permits <- c("#BAE4B6", "#85C07F", "#5E8C59", "#4A7246", "#2D4A2A")
 
 #Divide permits by before 1 and after 1 year
 
@@ -608,46 +616,24 @@ panel_pm_4YForward%>%
   gather(Variable, value, -delayed, -fire, -geometry)%>%
   filter(value > 0)%>%
   ggplot()+
-    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(data=acsTractsPHL.2020, aes(fill=q5(Med_Income)), color=NA)+
+    scale_fill_manual(values=palette5_permits, labels=qBr(acsTractsPHL.2020, "Med_Income"))+
     geom_sf(aes(color=fire), size=0.75)+
-    scale_color_manual(values= c("#3f3128", "#20b1ae"))+
+    scale_color_manual(values= c("#20B1AE", "#F1C82B"))+
     facet_wrap(~delayed, nrow=1, labeller = labeller(delayed = delayed.labs))+
     labs(title = "Permits in Properties With Fires, by Years After The Fire") +
     mapTheme()
 
-```
-The map shows some differences.
-
-```{r}
-
-panel_pm_4YForward%>%
-  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
-  filter(!(n_permits == 0), fire == 1)%>%
-  mutate(delayed = ifelse(ySinceFire <= 1, 0, 1))%>%
-  dplyr::select(n_permits, delayed, name)%>%
-  st_drop_geometry()%>%
-  group_by(name) %>%
-  summarize(delayRate = sum(delayed)/sum(n_permits>0), 
-            permits = sum(n_permits))%>%
-  arrange(desc(delayRate))%>%
-  filter(permits > 1)%>%
-  left_join(nhoods, by="name")%>%
-  st_as_sf()%>%
-  ggplot()+
-    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
-    geom_sf(aes(fill=delayRate))+
-    scale_fill_viridis_c()+
-    labs(title = "Percentage of properties with permits 1 year after a fire") +
-    mapTheme()
 
 
 ```
+There isn't an obvious spatial with  trend other than a slight decrease of repairs in Northeast and the Northern South Philadelphia.
 
-Fire stricken properties appear to have more vacancy reports in areas of already-high vacancy rates, as defined by ACS Data for 2020. Vacant properties tend to linger in these areas as well. The two maps below divide the vacancy reports for the matched-set between reports within 1 year of the fire and reports between 1 year and 4 years after the fire. The blue dots appear to consolidate into those darker, higher-vacancy areas.  
+On the vacancy end, fire stricken properties appear to have more vacancy reports in areas of already-high vacancy rates, as defined by ACS Data for 2020. Vacant properties tend to linger in these areas as well. The two maps below divide the vacancy reports for the matched-set between reports within 1 year of the fire and reports between 1 year and 4 years after the fire. The blue dots appear to somewhat consolidate into those darker, higher-vacancy areas.  
 
 ```{r vacancy clusters}
 
-palette5_fire <- c("#F1C82B", "#E19825", "#D55816", "#D55816", "#401307")
+palette5_vacant <- c("#F0EBDE", "#F9F8EB", "#F0EBDE", "#D1BCA6", "#3A352F")
 
 #Divide vacancies by before 1 and after 1 year
 
@@ -663,9 +649,9 @@ panel_pm_4YForward%>%
   filter(value > 0)%>%
   ggplot()+
     geom_sf(data=acsTractsPHL.2020, aes(fill=q5(Perc_Vacant)), color=NA)+
-        scale_fill_manual(values=palette5_sat, labels=qBr(acsTractsPHL.2020, "Perc_Vacant"))+
-    geom_sf(aes(color=fire), size=1)+
-    scale_color_manual(values= c("#FFFFFF", "#20B1AE"))+
+        scale_fill_manual(values=palette5_vacant, labels=qBr(acsTractsPHL.2020, "Perc_Vacant"))+
+    geom_sf(aes(color=fire), size=0.75)+
+    scale_color_manual(values= c("#20B1AE", "#F1C82B"))+
     facet_wrap(~lingering, nrow=1, labeller = labeller(lingering= lingering))+
     labs(title = "Matched-Set Vacancy Reports Cluster in Areas of High Vacancy",
          subtitle = "Philadelphia County, Fires from 2013-2018, Vacancy Reports from 2013-2022",
@@ -674,11 +660,34 @@ panel_pm_4YForward%>%
 
 ```
 
-This map shows which neighborhoods have the highest rate of vacancies that persist over a year after the fire, which signals obstacles to recovery.
 
-```{r lingering vacancies}
+To be more precise, we measured each neighborhood's rate of its properties'permit requests and vacancy records 1-4 years after a fire and compared it to the total total count of each for the fire-stricken properties:
 
-panel_pm_4YForward%>%
+```{r Combo Rate Graphs 1 Year Plus Vacancies and Permits}
+
+library(gridExtra)
+
+delayedMap <- panel_pm_4YForward%>%
+  filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
+  filter(!(n_permits == 0), fire == 1)%>%
+  mutate(delayed = ifelse(ySinceFire <= 1, 0, 1))%>%
+  dplyr::select(n_permits, delayed, name)%>%
+  st_drop_geometry()%>%
+  group_by(name) %>%
+  summarize(delayRate = sum(delayed)/sum(n_permits>0), 
+            permits = sum(n_permits))%>%
+  arrange(desc(delayRate))%>%
+  filter(permits > 1)%>%
+  left_join(nhoods, by="name")%>%
+  st_as_sf()%>%
+  ggplot()+
+    geom_sf(data=nhoods, fill='#f3efe0', color='dark gray')+
+    geom_sf(aes(fill=delayRate))+
+    scale_fill_viridis_c()+
+    labs(title = "Rate of Delayed Permits by Neighborhood",
+         subtitle = "Neighborhoods with Permits Over 1 Year After A Fire vs Total Fire-Property Permits") +mapTheme()
+
+lingeringMap <- panel_pm_4YForward%>%
   filter(year(quarter.y) < 2019 & year(quarter.y) > 2012)%>%
   filter(!(n_Vacant == 0), fire == 1)%>%
   mutate(lingering = ifelse(ySinceFire <= 1, 0, 1))%>%
@@ -692,16 +701,28 @@ panel_pm_4YForward%>%
   left_join(nhoods, by="name")%>%
   st_as_sf()%>%
   ggplot()+
-    geom_sf(data=acsTractsPHL.2020, fill='#f3efe0', color='dark gray')+
+    geom_sf(data=nhoods, fill='#f3efe0', color='dark gray')+
     geom_sf(aes(fill=lingeringRate))+
     scale_fill_viridis_c()+
     labs(title = "Rate of Lingering Vacancies by Neighborhood",
          subtitle = "Neighborhoods with Vacancies 1 Year After A Fire vs Total Vacancies") +
     mapTheme()
 
+grid.arrange(delayedMap, lingeringMap, nrow=1)
+
+```
+
+This map shows which areas have the highest rate of vacancies that persist over a year after the fire, which signals obstacles to recovery. The map is incomplete due to the low rate of vacancies in some areas and the fact that we excluded some building types from the analysis that are clustered in Center City.
+
+
+```{r lingering vacancies}
+
+
 #g(panel_pm_4YForward)
 
 ```
+
+This analysis does show some difference in these two metrics. Recovery may happen slowest in neighborhoods with the highest lingering vacancies and delayed permits. 
 
 ## Are investors buying fire-stricken properties at a higher rate than normal properties?
 
@@ -785,7 +806,7 @@ panel_pm_4Y_sales%>%
 
 ```
 
-Conversely, if we look at investor-to-homeowner sales, there’s a lag time where investor-owned properties with fires are sold at a lower rate, but then investor sales pick up after six months. This may indicate a flip-sale trend,
+Conversely, if we look at investor-to-homeowner sales, there’s a lag time where investor-owned properties with fires are sold at a lower rate, but then investor sales pick up after six months. This may indicate a flip-sale trend, with a purchase and renovation period in the couple quarters, followed by increased sales from the investors. 
 
 ```{r investors to homeowners}
 
