@@ -157,6 +157,8 @@ Covariates:
 
 ```{r Box Set Up, message=FALSE, warning=FALSE}
 
+
+
 ```
 
 ### Cleaning
@@ -220,6 +222,8 @@ acs_variable_list.2016 <- load_variables(2016, #year
 ```
 
 ### Loading
+
+
 
 ```{r ACS Data Loading, warning=FALSE, message=FALSE}
 
@@ -311,6 +315,7 @@ nhoods <- st_read("../Data/Neighborhoods_Philadelphia.geojson")%>%
 
 
 ## Combining Data
+The process for creating the set follows the steps in [this tutorial](https://simonejdemyr.com/r-tutorials/statistics/tutorial8.html). In summary, we create a rough model that estimates the likelihood that a building will have a fire, then match properties with similar propensity-for-fire scores and other variables using a matching algorithm. The initial contrast between the properties that had fires and those that didn't is here: 
 
 ```{r Tabular and Spatial Join }
 
@@ -346,15 +351,9 @@ opa_sf %>%
 
 # Propensity Score Estimation
 
+Here are the very rough variables for fire likelihood. We use predictors from the OPA dataset that monitor the quality of the home, the demographics of the area, include the current owner occupancy comparisons we previously engineered, and include the neighborhood name as a categorical variable to control for neighborhood effects. Again, this model could be vastly improved on its own, but the goal here is to simply get the overall sample distributions of these variables to be the same.
+
 ```{r}
-
-g(opa_sf)
-
-m_ps <- glm(fire ~ total_livable_area + number_of_bedrooms + Price_Sqft + Med_Income + Perc_White, 
-            family = binomial(), data = opa_sf)
-
-summary(m_ps)
-
 
 m_ps2 <- glm(fire ~ total_livable_area + number_of_bedrooms + Price_Sqft + Med_Income + Perc_White + owner_occ + quality_grade_mod + name, 
             family = binomial(), data = opa_sf)
@@ -371,7 +370,7 @@ head(prs_df)
 
 ```
 
-# REgion of common support
+# Region of common support
 
 ```{r}
 
@@ -387,6 +386,10 @@ prs_df %>%
 ```
 
 # Matching Algorithm
+
+For the matching algorithm to work, we had to eliminate any observations that did not have the right data available. This cut down our count of fires from the original ~18,000 non-outliers we started with to around 12,000 incidents. Fortunately that's still a healthy sample.
+
+See how the averages of the variables are much more aligned than before the modeling and matching process? With this set of 24,000 properties, we could move forward with analysis.
 
 ```{r}
 
@@ -406,6 +409,8 @@ dta_m <- match.data(mod_match)
 ```
 
 #Difference In Means
+
+
 
 ```{r}
 
